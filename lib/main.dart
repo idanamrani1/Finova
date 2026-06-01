@@ -3,6 +3,64 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
 
+// ───────────────────────────────────────────
+// מערכת תרגום - כל הטקסטים בממשק
+// ───────────────────────────────────────────
+class T {
+  static const Map<String, Map<String, String>> _s = {
+    'research': {'he': 'Research', 'en': 'Research'},
+    'dailyBrief': {'he': 'סיכום יומי', 'en': 'Daily Brief'},
+    'alerts': {'he': 'התראות', 'en': 'Alerts'},
+    'settings': {'he': 'הגדרות', 'en': 'Settings'},
+    'searchHint': {'he': 'חפש מניה (שם או סימול)', 'en': 'Search stock (name or ticker)'},
+    'researchSubtitle': {'he': 'מנוע ניתוח פונדמנטלי', 'en': '20-Point Fundamental Engine'},
+    'summary': {'he': 'סיכום', 'en': 'Summary'},
+    'fundamentals': {'he': 'פונדמנטלי', 'en': 'Fundamentals'},
+    'catalysts': {'he': 'קטליזטורים', 'en': 'Catalysts'},
+    'finovaScore': {'he': 'ציון FINOVA', 'en': 'FINOVA SCORE'},
+    'quality': {'he': 'איכות', 'en': 'Quality'},
+    'value': {'he': 'מחיר', 'en': 'Value'},
+    'growth': {'he': 'צמיחה', 'en': 'Growth'},
+    'risk': {'he': 'סיכון', 'en': 'Risk'},
+    'tapForBreakdown': {'he': 'הקש לפירוט מלא של הציון', 'en': 'Tap for full score breakdown'},
+    'scoreBreakdownTitle': {'he': 'ממה מורכב הציון', 'en': 'How the score is built'},
+    'scoreBreakdownSub': {'he': 'כל מדד מבוסס על נתון אמיתי', 'en': 'Each metric is based on real data'},
+    'scoreWeights': {
+      'he': 'הציון הכולל הוא ממוצע משוקלל: איכות 35%, צמיחה 25%, מחיר 20%, סיכון 20%. איכות מקבלת משקל גבוה כי חברה מעולה ביוקר עדיפה על חברה חלשה בזול.',
+      'en': 'The total is a weighted average: Quality 35%, Growth 25%, Value 20%, Risk 20%. Quality is weighted higher because a great company at a high price beats a weak one at a low price.'
+    },
+    'gotIt': {'he': 'הבנתי', 'en': 'Got it'},
+    'keyStatistics': {'he': 'נתונים מרכזיים', 'en': 'Key Statistics'},
+    'aiRecommendation': {'he': 'המלצת AI', 'en': 'AI RECOMMENDATION'},
+    'verdict': {'he': 'הערכה', 'en': 'VERDICT'},
+    'confidence': {'he': 'ביטחון', 'en': 'CONFIDENCE'},
+    'tapForDetails': {'he': 'הקש לפרטים', 'en': 'Tap for details'},
+    'dailyBriefTitle': {'he': 'הסיכום היומי', 'en': 'Daily Brief'},
+    'bigHeadline': {'he': 'הכותרת הגדולה היום', 'en': "TODAY'S BIG STORY"},
+    'keyMarkets': {'he': 'מדדים מרכזיים', 'en': 'Key Markets'},
+    'whatMovesWorld': {'he': 'מה מזיז את העולם', 'en': 'What Moves the World'},
+    'finovaInsight': {'he': 'התובנה של Finova: ', 'en': 'Finova Insight: '},
+    'companiesInHeadlines': {'he': 'חברות בכותרות', 'en': 'Companies in the Headlines'},
+    'loadingBrief': {'he': 'טוען את הסיכום היומי...', 'en': 'Loading daily brief...'},
+    'briefError': {'he': 'שגיאה בטעינת הסיכום', 'en': 'Error loading brief'},
+    'retry': {'he': 'נסה שוב', 'en': 'Retry'},
+    'darkMode': {'he': 'מצב כהה', 'en': 'Dark Mode'},
+    'language': {'he': 'שפה', 'en': 'Language'},
+    'textSize': {'he': 'גודל טקסט', 'en': 'Text Size'},
+    'small': {'he': 'קטן', 'en': 'Small'},
+    'normal': {'he': 'רגיל', 'en': 'Normal'},
+    'large': {'he': 'גדול', 'en': 'Large'},
+    'notFound': {'he': 'לא נמצאה מניה כזו', 'en': 'No such stock found'},
+    'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
+    'searchToStart': {'he': 'חפש מניה כדי להתחיל', 'en': 'Search a stock to start'},
+    'noAlerts': {'he': 'אין התראות עדיין', 'en': 'No alerts yet'},
+  };
+
+  static String get(String key, String lang) {
+    return _s[key]?[lang] ?? _s[key]?['en'] ?? key;
+  }
+}
+
 void main() {
   runApp(const MyApp());
 }
@@ -17,6 +75,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   bool isDarkMode = true;
   double textScale = 1.0;
+  String lang = 'he'; // 'he' או 'en'
 
   void toggleTheme(bool isDark) {
     setState(() {
@@ -27,6 +86,12 @@ class _MyAppState extends State<MyApp> {
   void setTextScale(double scale) {
     setState(() {
       textScale = scale;
+    });
+  }
+
+  void setLang(String newLang) {
+    setState(() {
+      lang = newLang;
     });
   }
 
@@ -67,6 +132,8 @@ class _MyAppState extends State<MyApp> {
         isDarkMode: isDarkMode,
         onTextScaleChanged: setTextScale,
         textScale: textScale,
+        lang: lang,
+        onLangChanged: setLang,
       ),
     );
   }
@@ -77,6 +144,8 @@ class DashboardScreen extends StatefulWidget {
   final bool isDarkMode;
   final Function(double) onTextScaleChanged;
   final double textScale;
+  final String lang;
+  final Function(String) onLangChanged;
 
   const DashboardScreen({
     super.key,
@@ -84,6 +153,8 @@ class DashboardScreen extends StatefulWidget {
     required this.isDarkMode,
     required this.onTextScaleChanged,
     required this.textScale,
+    required this.lang,
+    required this.onLangChanged,
   });
 
   @override
@@ -93,6 +164,9 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   late TabController _tabController;
+
+  // קיצור לתרגום
+  String tr(String key) => T.get(key, widget.lang);
 
   int _selectedIndex = 0;
   String symbol = "NVDA";
@@ -106,6 +180,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   bool isNotFound = false;
   Map<String, dynamic>? analysisData;
   Map<String, dynamic>? finovaScore;
+
+  // חיפוש עם השלמה אוטומטית
+  List<Map<String, dynamic>> searchSuggestions = [];
+  bool isSearching = false;
+  Timer? _searchDebounce;
 
   // Daily Brief state
   Map<String, dynamic>? dailyBriefData;
@@ -128,8 +207,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   @override
+  void didUpdateWidget(DashboardScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // אם השפה השתנתה - מנקים מטמון ומושכים מחדש בשפה החדשה
+    if (oldWidget.lang != widget.lang) {
+      dailyBriefData = null;
+      if (analysisData != null) {
+        fetchStockData(symbol);
+      }
+      if (_selectedIndex == 1) {
+        fetchDailyBrief();
+      }
+    }
+  }
+
+  @override
   void dispose() {
     _priceTimer?.cancel();
+    _searchDebounce?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     super.dispose();
@@ -145,7 +240,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     });
 
     final url = Uri.parse(
-      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}',
+      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
     );
 
     try {
@@ -182,9 +277,55 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // עדכון מחיר בלבד בזמן אמת - בלי לטעון מחדש את כל הניתוח
+  // חיפוש עם השלמה אוטומטית - עם השהיה כדי לא להציף בקריאות
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    if (query.trim().length < 2) {
+      setState(() => searchSuggestions = []);
+      return;
+    }
+    _searchDebounce = Timer(const Duration(milliseconds: 350), () {
+      _fetchSuggestions(query.trim());
+    });
+  }
+
+  Future<void> _fetchSuggestions(String query) async {
+    setState(() => isSearching = true);
+    final url = Uri.parse(
+      'https://equity-research-backend.onrender.com/api/search/${Uri.encodeComponent(query)}',
+    );
+    try {
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) {
+        final List data = json.decode(response.body);
+        if (mounted) {
+          setState(() {
+            searchSuggestions = data
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList()
+                .take(8)
+                .toList();
+            isSearching = false;
+          });
+        }
+      } else {
+        if (mounted) setState(() => isSearching = false);
+      }
+    } catch (e) {
+      if (mounted) setState(() => isSearching = false);
+    }
+  }
+
+  void _selectSuggestion(String ticker) {
+    _searchController.clear();
+    setState(() => searchSuggestions = []);
+    FocusScope.of(context).unfocus();
+    fetchStockData(ticker);
+  }
+
   Future<void> _refreshPrice(String ticker) async {
     final url = Uri.parse(
-      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}',
+      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
     );
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 30));
@@ -209,7 +350,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       briefError = false;
     });
 
-    final url = Uri.parse('https://equity-research-backend.onrender.com/api/daily-brief');
+    final url = Uri.parse('https://equity-research-backend.onrender.com/api/daily-brief?lang=${widget.lang}');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 120));
@@ -269,10 +410,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           height: 64,
           child: Row(
             children: [
-              _buildNavItem(Icons.bar_chart_rounded, 'Research', 0, primary, subColor),
-              _buildNavItem(Icons.wb_sunny_outlined, 'סיכום יומי', 1, primary, subColor),
-              _buildNavItem(Icons.notifications_outlined, 'Alerts', 2, primary, subColor),
-              _buildNavItem(Icons.settings_outlined, 'Settings', 3, primary, subColor),
+              _buildNavItem(Icons.bar_chart_rounded, tr('research'), 0, primary, subColor),
+              _buildNavItem(Icons.wb_sunny_outlined, tr('dailyBrief'), 1, primary, subColor),
+              _buildNavItem(Icons.notifications_outlined, tr('alerts'), 2, primary, subColor),
+              _buildNavItem(Icons.settings_outlined, tr('settings'), 3, primary, subColor),
             ],
           ),
         ),
@@ -457,13 +598,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('Research',
+                          Text(tr('research'),
                               style: TextStyle(
                                   fontSize: 26,
                                   fontWeight: FontWeight.w800,
                                   color: textColor,
                                   letterSpacing: -0.5)),
-                          Text('20-Point Fundamental Engine',
+                          Text(tr('researchSubtitle'),
                               style: TextStyle(fontSize: 12, color: subTextColor)),
                         ],
                       ),
@@ -490,17 +631,92 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     controller: _searchController,
                     style: TextStyle(color: textColor, fontWeight: FontWeight.w600),
                     decoration: InputDecoration(
-                      hintText: 'Search ticker (e.g. TSLA)',
+                      hintText: tr('searchHint'),
                       hintStyle: TextStyle(color: subTextColor, fontSize: 14),
                       border: InputBorder.none,
                       icon: Icon(Icons.search, color: Theme.of(context).primaryColor),
+                      suffixIcon: isSearching
+                          ? Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Theme.of(context).primaryColor),
+                        ),
+                      )
+                          : (_searchController.text.isNotEmpty
+                          ? IconButton(
+                        icon: Icon(Icons.close, color: subTextColor, size: 18),
+                        onPressed: () {
+                          _searchController.clear();
+                          setState(() => searchSuggestions = []);
+                        },
+                      )
+                          : null),
                     ),
+                    onChanged: _onSearchChanged,
                     onSubmitted: (value) {
-                      _searchController.clear();
-                      fetchStockData(value);
+                      if (value.trim().isNotEmpty) _selectSuggestion(value.trim().toUpperCase());
                     },
                   ),
                 ),
+                // רשימת הצעות השלמה אוטומטית
+                if (searchSuggestions.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    decoration: BoxDecoration(
+                      color: cardColor,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                          color: Theme.of(context).primaryColor.withOpacity(0.1), width: 1),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.15),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: searchSuggestions.map((sug) {
+                        final ticker = sug['symbol']?.toString() ?? '';
+                        final name = sug['description']?.toString() ?? '';
+                        return InkWell(
+                          onTap: () => _selectSuggestion(ticker),
+                          borderRadius: BorderRadius.circular(14),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor.withOpacity(0.15),
+                                    borderRadius: BorderRadius.circular(7),
+                                  ),
+                                  child: Text(ticker,
+                                      style: TextStyle(
+                                          color: Theme.of(context).primaryColor,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800)),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: textColor, fontSize: 13)),
+                                ),
+                                Icon(Icons.north_west, size: 14, color: subTextColor),
+                              ],
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 10),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -553,10 +769,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       unselectedLabelColor: subTextColor,
                       labelStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                       dividerColor: Colors.transparent,
-                      tabs: const [
-                        Tab(text: 'Summary'),
-                        Tab(text: 'Fundamentals'),
-                        Tab(text: 'Catalysts'),
+                      tabs: [
+                        Tab(text: tr('summary')),
+                        Tab(text: tr('fundamentals')),
+                        Tab(text: tr('catalysts')),
                       ],
                     ),
                   ),
@@ -570,7 +786,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 : isNotFound
                 ? _buildNotFound()
                 : analysisData == null
-                ? Center(child: Text('Search for an asset to begin.', style: TextStyle(color: subTextColor)))
+                ? Center(child: Text(tr('searchToStart'), style: TextStyle(color: subTextColor)))
                 : TabBarView(
               controller: _tabController,
               children: [
@@ -619,7 +835,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     return SafeArea(
       child: Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
         child: isBriefLoading
             ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
             : briefError
@@ -629,14 +845,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             children: [
               Icon(Icons.cloud_off_rounded, size: 60, color: subTextColor),
               const SizedBox(height: 16),
-              Text('הסיכום לא זמין כרגע', style: TextStyle(fontSize: 18, color: textColor)),
+              Text(tr('briefError'), style: TextStyle(fontSize: 18, color: textColor)),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: () {
                   setState(() => dailyBriefData = null);
                   fetchDailyBrief();
                 },
-                child: const Text('נסה שוב'),
+                child: Text(tr('retry')),
               ),
             ],
           ),
@@ -677,7 +893,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(date, style: TextStyle(fontSize: 12, color: subTextColor)),
-                  Text('הסיכום היומי',
+                  Text(tr('dailyBriefTitle'),
                       style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w800,
@@ -725,7 +941,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       color: const Color(0xFFf87171).withOpacity(0.18),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Text('הכותרת הגדולה היום',
+                    child: Text(tr('bigHeadline'),
                         style: TextStyle(
                             color: Color(0xFFfca5a5),
                             fontSize: 10,
@@ -746,8 +962,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       children: topMarketKeys.map((k) {
                         final data = markets[k] as Map<String, dynamic>;
                         final change = (data['change'] as num?)?.toDouble() ?? 0;
+                        final price = (data['price'] as num?)?.toDouble() ?? 0;
                         final isPos = change >= 0;
                         final c = isPos ? const Color(0xFF4ade80) : const Color(0xFFf87171);
+                        // פורמט מחיר: מספרים גדולים עם פסיקים, קטנים עם 2 ספרות
+                        final priceStr = price >= 1000
+                            ? price.toStringAsFixed(0).replaceAllMapped(
+                            RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
+                            : price.toStringAsFixed(2);
                         return Expanded(
                           child: Container(
                             margin: const EdgeInsets.only(left: 8),
@@ -759,10 +981,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(k, style: TextStyle(fontSize: 10, color: subTextColor)),
+                                Text(k,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(fontSize: 10, color: subTextColor)),
                                 const SizedBox(height: 3),
+                                Text(priceStr,
+                                    style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w800,
+                                        color: Theme.of(context).textTheme.bodyMedium!.color)),
+                                const SizedBox(height: 1),
                                 Text('${isPos ? '+' : ''}${change.toStringAsFixed(2)}%',
-                                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: c)),
+                                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: c)),
                               ],
                             ),
                           ),
@@ -775,13 +1006,88 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ),
           const SizedBox(height: 20),
 
+          // כל המדדים - 6 הנכסים עם מחיר ואחוז
+          if (markets.isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.bar_chart_rounded, color: Theme.of(context).primaryColor, size: 18),
+                const SizedBox(width: 7),
+                Text(tr('keyMarkets'),
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 2.1,
+              children: markets.entries.map((entry) {
+                final data = entry.value as Map<String, dynamic>;
+                final change = (data['change'] as num?)?.toDouble() ?? 0;
+                final price = (data['price'] as num?)?.toDouble() ?? 0;
+                final isPos = change >= 0;
+                final c = isPos ? const Color(0xFF4ade80) : const Color(0xFFf87171);
+                final priceStr = price >= 1000
+                    ? price.toStringAsFixed(0).replaceAllMapped(
+                    RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
+                    : price.toStringAsFixed(2);
+                return Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: c.withOpacity(0.18), width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(entry.key,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: subTextColor)),
+                      const SizedBox(height: 5),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(priceStr,
+                              style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                  color: textColor,
+                                  letterSpacing: -0.3)),
+                          const Spacer(),
+                          Row(
+                            children: [
+                              Icon(
+                                  isPos ? Icons.arrow_drop_up : Icons.arrow_drop_down,
+                                  color: c,
+                                  size: 18),
+                              Text('${isPos ? '+' : ''}${change.toStringAsFixed(2)}%',
+                                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: c)),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 20),
+          ],
+
           // מה מזיז את העולם - חדשות מקוטלגות
           if (newsItems.isNotEmpty) ...[
             Row(
               children: [
                 Icon(Icons.public, color: Theme.of(context).primaryColor, size: 18),
                 const SizedBox(width: 7),
-                Text('מה מזיז את העולם',
+                Text(tr('whatMovesWorld'),
                     style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
               ],
             ),
@@ -833,9 +1139,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       text: TextSpan(
                         style: TextStyle(fontSize: 13, color: textColor, height: 1.5),
                         children: [
-                          const TextSpan(
-                              text: 'התובנה של Finova: ',
-                              style: TextStyle(fontWeight: FontWeight.w800)),
+                          TextSpan(
+                              text: tr('finovaInsight'),
+                              style: const TextStyle(fontWeight: FontWeight.w800)),
                           TextSpan(text: insight),
                         ],
                       ),
@@ -849,7 +1155,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
           // חברות בכותרות
           if (companies.isNotEmpty) ...[
-            Text('חברות בכותרות', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
+            Text(tr('companiesInHeadlines'), style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: textColor)),
             const SizedBox(height: 10),
             ...companies.map((c) {
               final company = c as Map<String, dynamic>;
@@ -907,10 +1213,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   // צבע לפי קטגוריית חדשות
   Color _categoryColor(String cat) {
-    if (cat.contains('גיאופוליטיק') || cat.contains('אנרגיה')) return const Color(0xFFf87171);
-    if (cat.contains('טכנולוגיה')) return const Color(0xFF4ade80);
-    if (cat.contains('מאקרו')) return const Color(0xFF7C7FF2);
-    return const Color(0xFFfbbf24); // שווקים / ברירת מחדל
+    final c = cat.toLowerCase();
+    if (cat.contains('גיאופוליטיק') || cat.contains('אנרגיה') ||
+        c.contains('geopolit') || c.contains('energy')) return const Color(0xFFf87171);
+    if (cat.contains('טכנולוגיה') || c.contains('tech')) return const Color(0xFF4ade80);
+    if (cat.contains('מאקרו') || c.contains('macro')) return const Color(0xFF7C7FF2);
+    return const Color(0xFFfbbf24); // שווקים / markets / default
   }
 
   Widget _buildNewsCard(String category, String title, String detail) {
@@ -995,7 +1303,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ],
           _buildRecommendationCard(),
           const SizedBox(height: 16),
-          _buildSectionTitle('Key Statistics'),
+          _buildSectionTitle(tr('keyStatistics')),
           GridView.count(
             crossAxisCount: 2,
             shrinkWrap: true,
@@ -1120,10 +1428,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final Color color = _scoreColor(total);
 
     final subs = [
-      {'name': 'איכות', 'val': (s['quality'] ?? 0) as int},
-      {'name': 'מחיר', 'val': (s['value'] ?? 0) as int},
-      {'name': 'צמיחה', 'val': (s['growth'] ?? 0) as int},
-      {'name': 'סיכון', 'val': (s['risk'] ?? 0) as int},
+      {'name': tr('quality'), 'val': (s['quality'] ?? 0) as int},
+      {'name': tr('value'), 'val': (s['value'] ?? 0) as int},
+      {'name': tr('growth'), 'val': (s['growth'] ?? 0) as int},
+      {'name': tr('risk'), 'val': (s['risk'] ?? 0) as int},
     ];
 
     return GestureDetector(
@@ -1140,7 +1448,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           border: Border.all(color: color.withOpacity(0.28), width: 1),
         ),
         child: Directionality(
-          textDirection: TextDirection.rtl,
+          textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -1183,7 +1491,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('ציון FINOVA',
+                        Text(tr('finovaScore'),
                             style: TextStyle(
                                 fontSize: 10,
                                 fontWeight: FontWeight.w700,
@@ -1263,7 +1571,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                       size: 13,
                       color: Theme.of(context).textTheme.bodySmall!.color),
                   const SizedBox(width: 5),
-                  Text('הקש לפירוט מלא של הציון',
+                  Text(tr('tapForBreakdown'),
                       style: TextStyle(
                           fontSize: 11,
                           color: Theme.of(context).textTheme.bodySmall!.color)),
@@ -1292,7 +1600,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     showDialog(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
         child: Dialog(
           backgroundColor: Theme.of(context).cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -1320,12 +1628,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('ממה מורכב הציון',
+                            Text(tr('scoreBreakdownTitle'),
                                 style: TextStyle(
                                     fontSize: 17,
                                     fontWeight: FontWeight.w800,
                                     color: Theme.of(context).textTheme.bodyMedium!.color)),
-                            Text('כל מדד מבוסס על נתון אמיתי',
+                            Text(tr('scoreBreakdownSub'),
                                 style: TextStyle(
                                     fontSize: 12,
                                     color: Theme.of(context).textTheme.bodySmall!.color)),
@@ -1419,7 +1727,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                              'הציון הכולל הוא ממוצע משוקלל: איכות 35%, צמיחה 25%, מחיר 20%, סיכון 20%. איכות מקבלת משקל גבוה כי חברה מעולה ביוקר עדיפה על חברה חלשה בזול.',
+                              tr('scoreWeights'),
                               style: TextStyle(
                                   fontSize: 11,
                                   height: 1.5,
@@ -1438,7 +1746,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
-                      child: const Text('הבנתי',
+                      child: Text(tr('gotIt'),
                           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 14)),
                     ),
                   ),
@@ -1618,7 +1926,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     showDialog(
       context: context,
       builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
         child: Dialog(
           backgroundColor: Theme.of(context).cardColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1644,7 +1952,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   alignment: Alignment.centerLeft,
                   child: TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text('הבנתי', style: TextStyle(color: Theme.of(context).primaryColor)),
+                    child: Text(tr('gotIt'), style: TextStyle(color: Theme.of(context).primaryColor)),
                   ),
                 ),
               ],
@@ -1837,7 +2145,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Alerts', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
+            Text(tr('alerts'), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
             const SizedBox(height: 4),
             Text('Price & news notifications', style: TextStyle(fontSize: 13, color: subTextColor)),
             const Spacer(),
@@ -1846,7 +2154,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 children: [
                   Icon(Icons.notifications_none_rounded, size: 80, color: subTextColor.withOpacity(0.4)),
                   const SizedBox(height: 16),
-                  Text('No alerts set yet.', style: TextStyle(fontSize: 18, color: textColor)),
+                  Text(tr('noAlerts'), style: TextStyle(fontSize: 18, color: textColor)),
                   const SizedBox(height: 4),
                   Text('Coming soon.', style: TextStyle(color: subTextColor)),
                 ],
@@ -1875,15 +2183,79 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Settings', style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
+            Text(tr('settings'), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
             const SizedBox(height: 24),
+
+            // Language selector
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.language, color: Theme.of(context).primaryColor, size: 20),
+                      const SizedBox(width: 10),
+                      Text(tr('language'), style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => widget.onLangChanged('he'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: widget.lang == 'he'
+                                  ? Theme.of(context).primaryColor
+                                  : Theme.of(context).scaffoldBackgroundColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text('עברית',
+                                  style: TextStyle(
+                                      color: widget.lang == 'he' ? Colors.white : textColor,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: GestureDetector(
+                          onTap: () => widget.onLangChanged('en'),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: widget.lang == 'en'
+                                  ? Theme.of(context).primaryColor
+                                  : Theme.of(context).scaffoldBackgroundColor,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Center(
+                              child: Text('English',
+                                  style: TextStyle(
+                                      color: widget.lang == 'en' ? Colors.white : textColor,
+                                      fontWeight: FontWeight.w700)),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
 
             // Dark mode
             Container(
               decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
               child: SwitchListTile(
-                title: Text('Dark Mode', style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
-                subtitle: Text('Toggle visual appearance', style: TextStyle(color: subTextColor, fontSize: 12)),
+                title: Text(tr('darkMode'), style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
                 value: widget.isDarkMode,
                 activeColor: Theme.of(context).primaryColor,
                 onChanged: widget.onThemeChanged,
@@ -1897,7 +2269,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               children: [
                 Icon(Icons.accessibility_new_rounded, color: Theme.of(context).primaryColor, size: 20),
                 const SizedBox(width: 8),
-                Text('Accessibility', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+                Text(tr('textSize'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
               ],
             ),
             const SizedBox(height: 12),
@@ -1913,7 +2285,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       Icon(Icons.format_size, color: textColor, size: 20),
                       const SizedBox(width: 10),
-                      Text('Text Size', style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
+                      Text(tr('textSize'), style: TextStyle(color: textColor, fontWeight: FontWeight.w500)),
                       const Spacer(),
                       Text('${(widget.textScale * 100).toInt()}%', style: TextStyle(color: subTextColor, fontSize: 13)),
                     ],
@@ -1941,11 +2313,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             // Quick text size presets
             Row(
               children: [
-                _buildTextPreset('קטן', 0.9, textColor, cardColor),
+                _buildTextPreset(tr('small'), 0.9, textColor, cardColor),
                 const SizedBox(width: 10),
-                _buildTextPreset('רגיל', 1.0, textColor, cardColor),
+                _buildTextPreset(tr('normal'), 1.0, textColor, cardColor),
                 const SizedBox(width: 10),
-                _buildTextPreset('גדול', 1.2, textColor, cardColor),
+                _buildTextPreset(tr('large'), 1.2, textColor, cardColor),
               ],
             ),
 
