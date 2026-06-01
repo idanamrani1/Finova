@@ -247,6 +247,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       final response = await http.get(url).timeout(const Duration(seconds: 120));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        // ─── דיבאג זמני - לראות מה מגיע ───
+        print('DEBUG lang=${widget.lang}');
+        print('DEBUG analysis type: ${data['analysis'].runtimeType}');
+        print('DEBUG finalRecommendation: "${data['analysis']?['finalRecommendation']}"');
+        print('DEBUG confidenceLevel: "${data['analysis']?['confidenceLevel']}"');
         setState(() {
           symbol = data['symbol'];
           currentPrice = '\$${data['currentPrice']}';
@@ -254,7 +259,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           if (data['chartData'] != null) {
             chartPrices = (data['chartData'] as List).map((e) => (e as num).toDouble()).toList();
           }
-          analysisData = data['analysis'];
+          analysisData = data['analysis'] != null
+              ? Map<String, dynamic>.from(data['analysis'])
+              : null;
           finovaScore = data['finovaScore'] != null
               ? Map<String, dynamic>.from(data['finovaScore'])
               : null;
@@ -1827,7 +1834,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: [
                       Row(
                         children: [
-                          Text('AI RECOMMENDATION',
+                          Text(tr('aiRecommendation'),
                               style: TextStyle(
                                   color: accent.withOpacity(0.8),
                                   fontSize: 10,
@@ -1859,7 +1866,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('VERDICT',
+                      Text(tr('verdict'),
                           style: TextStyle(
                               color: Colors.white.withOpacity(0.4),
                               fontSize: 9,
@@ -1876,7 +1883,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('CONFIDENCE',
+                      Text(tr('confidence'),
                           style: TextStyle(
                               color: Colors.white.withOpacity(0.4),
                               fontSize: 9,
@@ -1891,7 +1898,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
                 Row(
                   children: [
-                    Text('Tap for details',
+                    Text(tr('tapForDetails'),
                         style: TextStyle(
                             color: Colors.white.withOpacity(0.5), fontSize: 11)),
                     const SizedBox(width: 4),
