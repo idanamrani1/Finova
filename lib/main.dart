@@ -86,6 +86,16 @@ class _MyAppState extends State<MyApp> {
   bool isDarkMode = true;
   double textScale = 1.0;
   String lang = 'he'; // 'he' או 'en'
+  bool _showSplash = true; // מסך פתיחה
+
+  @override
+  void initState() {
+    super.initState();
+    // מסך הפתיחה מוצג 2.5 שניות ואז עובר לאפליקציה
+    Timer(const Duration(milliseconds: 2500), () {
+      if (mounted) setState(() => _showSplash = false);
+    });
+  }
 
   void toggleTheme(bool isDark) {
     setState(() {
@@ -137,7 +147,9 @@ class _MyAppState extends State<MyApp> {
           child: child!,
         );
       },
-      home: DashboardScreen(
+      home: _showSplash
+          ? const SplashScreen()
+          : DashboardScreen(
         onThemeChanged: toggleTheme,
         isDarkMode: isDarkMode,
         onTextScaleChanged: setTextScale,
@@ -145,6 +157,167 @@ class _MyAppState extends State<MyApp> {
         lang: lang,
         onLangChanged: setLang,
       ),
+    );
+  }
+}
+
+// ───────────────────────────────────────────
+// מסך פתיחה (Splash Screen)
+// ───────────────────────────────────────────
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  late AnimationController _dotsController;
+  late Animation<double> _fade;
+  late Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    // אנימציית כניסה - הלוגו והשם מופיעים בהדרגה
+    _fadeController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    );
+    _fade = CurvedAnimation(parent: _fadeController, curve: Curves.easeOut);
+    _scale = Tween<double>(begin: 0.85, end: 1.0)
+        .animate(CurvedAnimation(parent: _fadeController, curve: Curves.easeOutBack));
+    _fadeController.forward();
+
+    // אנימציית הנקודות הפועמות
+    _dotsController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _dotsController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF0A0A12),
+      body: Stack(
+        children: [
+          // זוהר עדין במרכז
+          Center(
+            child: Container(
+              width: 320,
+              height: 320,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: RadialGradient(
+                  colors: [
+                    const Color(0xFF7C7FF2).withOpacity(0.18),
+                    const Color(0xFF7C7FF2).withOpacity(0.0),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // תוכן מרכזי
+          Center(
+            child: FadeTransition(
+              opacity: _fade,
+              child: ScaleTransition(
+                scale: _scale,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // לוגו
+                    Container(
+                      width: 96,
+                      height: 96,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(26),
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF7C7FF2), Color(0xFF5B5FD6)],
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF7C7FF2).withOpacity(0.35),
+                            blurRadius: 40,
+                            offset: const Offset(0, 12),
+                          ),
+                        ],
+                      ),
+                      child: const Icon(Icons.candlestick_chart_rounded,
+                          color: Colors.white, size: 52),
+                    ),
+                    const SizedBox(height: 26),
+                    // שם
+                    const Text('Finova',
+                        style: TextStyle(
+                            fontSize: 38,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                            letterSpacing: -1)),
+                    const SizedBox(height: 8),
+                    // טאגליין
+                    const Text('ניתוח מניות חכם, בשנייה',
+                        style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF8E8EA8),
+                            letterSpacing: 0.3)),
+                    const SizedBox(height: 30),
+                    // נקודות פועמות
+                    _buildPulsingDots(),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          // קרדיט בתחתית
+          Positioned(
+            bottom: 34,
+            left: 0,
+            right: 0,
+            child: Text('© 2025 Idan Amrani',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.25))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPulsingDots() {
+    return AnimatedBuilder(
+      animation: _dotsController,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(3, (i) {
+            // כל נקודה פועמת בעיכוב שונה
+            final t = (_dotsController.value - i * 0.2) % 1.0;
+            final opacity = 0.25 + 0.65 * (1 - (t - 0.5).abs() * 2).clamp(0.0, 1.0);
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3.5),
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF7C7FF2).withOpacity(opacity),
+                ),
+              ),
+            );
+          }),
+        );
+      },
     );
   }
 }
