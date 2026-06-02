@@ -54,6 +54,16 @@ class T {
     'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
     'searchToStart': {'he': 'חפש מניה כדי להתחיל', 'en': 'Search a stock to start'},
     'noAlerts': {'he': 'אין התראות עדיין', 'en': 'No alerts yet'},
+    'upcomingEvents': {'he': 'אירועים צפויים', 'en': 'Upcoming Events'},
+    'investmentThesis': {'he': 'תזת השקעה', 'en': 'Investment Thesis'},
+    'catalystsTitle': {'he': 'קטליזטורים', 'en': 'Catalysts'},
+    'fundamentalAnalysis': {'he': 'ניתוח פונדמנטלי', 'en': 'Fundamental Analysis'},
+    'revenueGrowthT': {'he': 'צמיחת הכנסות', 'en': 'Revenue Growth'},
+    'marginsTrendT': {'he': 'מגמת מרווחים', 'en': 'Margins Trend'},
+    'valuationT': {'he': 'תמחור מול מתחרים', 'en': 'Valuation vs Peers'},
+    'freeCashFlowT': {'he': 'תזרים מזומנים חופשי', 'en': 'Free Cash Flow'},
+    'investmentSummary': {'he': 'סיכום השקעה', 'en': 'Investment Summary'},
+    'keyCatalyst': {'he': 'קטליזטור מרכזי', 'en': 'Key Catalyst'},
   };
 
   static String get(String key, String lang) {
@@ -1342,14 +1352,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Fundamental Analysis'),
-          _buildTextCardNew('Revenue Growth', analysisData!['revenueGrowth'] ?? 'N/A', const Color(0xFF4F6AF5)),
+          _buildSectionTitle(tr('fundamentalAnalysis')),
+          _buildTextCardNew(tr('revenueGrowthT'), analysisData!['revenueGrowth'] ?? 'N/A', const Color(0xFF4F6AF5)),
           const SizedBox(height: 10),
-          _buildTextCardNew('Margins Trend', analysisData!['marginsTrend'] ?? 'N/A', const Color(0xFF4ade80)),
+          _buildTextCardNew(tr('marginsTrendT'), analysisData!['marginsTrend'] ?? 'N/A', const Color(0xFF4ade80)),
           const SizedBox(height: 10),
-          _buildTextCardNew('Valuation vs Peers', analysisData!['valuationVsPeers'] ?? 'N/A', Colors.orangeAccent),
+          _buildTextCardNew(tr('valuationT'), analysisData!['valuationVsPeers'] ?? 'N/A', Colors.orangeAccent),
           const SizedBox(height: 10),
-          _buildTextCardNew('Free Cash Flow', analysisData!['freeCashFlow'] ?? 'N/A', Colors.purpleAccent),
+          _buildTextCardNew(tr('freeCashFlowT'), analysisData!['freeCashFlow'] ?? 'N/A', Colors.purpleAccent),
         ],
       ),
     );
@@ -1361,14 +1371,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle('Upcoming Events'),
-          _buildListCardNew('Upcoming Events', analysisData!['upcomingEvents'], Icons.event_outlined, Colors.blueAccent),
+          _buildSectionTitle(tr('upcomingEvents')),
+          _buildListCardNew(tr('upcomingEvents'), analysisData!['upcomingEvents'], Icons.event_outlined, Colors.blueAccent),
           const SizedBox(height: 10),
-          _buildSectionTitle('Investment Thesis'),
-          _buildListCardNew('Investment Summary', analysisData!['thesisSummary'], Icons.lightbulb_outline, Colors.orangeAccent),
+          _buildSectionTitle(tr('investmentThesis')),
+          _buildListCardNew(tr('investmentSummary'), analysisData!['thesisSummary'], Icons.lightbulb_outline, Colors.orangeAccent),
           const SizedBox(height: 10),
-          _buildSectionTitle('Catalysts'),
-          _buildTextCardNew('Key Catalyst', analysisData!['catalysts'] ?? 'N/A', Colors.tealAccent),
+          _buildSectionTitle(tr('catalystsTitle')),
+          _buildTextCardNew(tr('keyCatalyst'), analysisData!['catalysts'] ?? 'N/A', Colors.tealAccent),
         ],
       ),
     );
@@ -2062,7 +2072,35 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _buildListCardNew(String title, dynamic listData, IconData icon, Color accentColor) {
-    List<dynamic> items = listData != null ? List.from(listData) : ['No data available'];
+    // הגנה: מקבלים רק רשימה תקינה של מחרוזות נקיות
+    List<String> items = [];
+    if (listData is List) {
+      for (final e in listData) {
+        final s = e.toString().trim();
+        // מסננים פריטים שבורים שמכילים שברי JSON או שמות שדות
+        if (s.isEmpty) continue;
+        if (s.contains('finalRecommendation') ||
+            s.contains('confidenceLevel') ||
+            s.contains('recommendationReason') ||
+            s.contains('thesisSummary') ||
+            s.startsWith('{') ||
+            s.startsWith('[') ||
+            s.startsWith('"') ||
+            s.length <= 2 ||   // פריטי זבל קצרים כמו "n" "," ":"
+            s == 'n' ||
+            s == ':' ||
+            s == ',') {
+          continue;
+        }
+        items.add(s);
+      }
+    } else if (listData is String && listData.trim().isNotEmpty) {
+      items.add(listData.trim());
+    }
+
+    if (items.isEmpty) {
+      items = [widget.lang == 'he' ? 'אין מידע זמין' : 'No data available'];
+    }
 
     return Container(
       width: double.infinity,
@@ -2089,7 +2127,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(item.toString(),
+                  child: Text(item,
                       style: TextStyle(color: Theme.of(context).textTheme.bodyMedium!.color, fontSize: 13, height: 1.4)),
                 ),
               ],
