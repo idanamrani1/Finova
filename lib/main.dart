@@ -684,11 +684,6 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       final response = await http.get(url).timeout(const Duration(seconds: 120));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        // ─── דיבאג זמני - לראות מה מגיע ───
-        print('DEBUG lang=${widget.lang}');
-        print('DEBUG analysis type: ${data['analysis'].runtimeType}');
-        print('DEBUG finalRecommendation: "${data['analysis']?['finalRecommendation']}"');
-        print('DEBUG confidenceLevel: "${data['analysis']?['confidenceLevel']}"');
         setState(() {
           symbol = data['symbol'];
           currentPrice = '\$${data['currentPrice']}';
