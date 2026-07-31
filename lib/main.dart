@@ -551,6 +551,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     if (_adminSectionOpen && !_adminStatusLoaded) {
       try {
         final res = await http.get(Uri.parse('$_apiBase/api/admin/status'));
+        if (!mounted) return;
         if (res.statusCode == 200) {
           final data = jsonDecode(res.body);
           setState(() {
@@ -576,6 +577,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'password': password}),
       );
+      if (!mounted) return;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
@@ -592,7 +594,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     } catch (_) {
       setState(() => _adminError = tr('connectionError'));
     } finally {
-      setState(() => _adminBusy = false);
+      if (mounted) setState(() => _adminBusy = false);
     }
   }
 
@@ -603,6 +605,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         Uri.parse('$_apiBase/api/admin/keys'),
         headers: {'Authorization': 'Bearer $_adminToken'},
       );
+      if (!mounted) return;
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
@@ -632,6 +635,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_adminToken'},
         body: jsonEncode(body),
       );
+      if (!mounted) return;
       if (res.statusCode == 200) {
         _finnhubController.clear();
         _groqController.clear();
@@ -649,7 +653,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     } catch (_) {
       setState(() => _adminError = tr('connectionError'));
     } finally {
-      setState(() => _adminBusy = false);
+      if (mounted) setState(() => _adminBusy = false);
     }
   }
 
@@ -860,17 +864,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Future<void> _refreshPrice(String ticker) async {
-    final url = Uri.parse(
-      'https://finovam.ddns.net/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
-    );
+    // endpoint קליל (קריאה חיצונית אחת) במקום הניתוח המלא -
+    // רענון כל 15 שניות דרך /api/analyze שרף 4 קריאות API בכל פעם
+    final url = Uri.parse('$_apiBase/api/quote/${ticker.trim().toUpperCase()}');
     try {
-      final response = await http.get(url).timeout(const Duration(seconds: 30));
+      final response = await http.get(url).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
+        final price = (data['price'] as num?)?.toDouble() ?? 0;
+        if (price <= 0) return;
         if (mounted) {
           setState(() {
-            currentPrice = '\$${data['currentPrice']}';
-            dailyChange = data['dailyChange'] != null ? (data['dailyChange'] as num).toDouble() : dailyChange;
+            currentPrice = '\$$price';
+            dailyChange = (data['dailyChange'] as num?)?.toDouble() ?? dailyChange;
           });
         }
       }
