@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // ───────────────────────────────────────────
 // מערכת תרגום - כל הטקסטים בממשק
@@ -56,6 +57,17 @@ class T {
     'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
     'searchToStart': {'he': 'חפש מניה כדי להתחיל', 'en': 'Search a stock to start'},
     'noAlerts': {'he': 'אין התראות עדיין', 'en': 'No alerts yet'},
+    'addAlertHint': {'he': 'הוסף התראה ראשונה למעלה', 'en': 'Add your first alert above'},
+    'alertTicker': {'he': 'טיקר', 'en': 'Ticker'},
+    'alertPrice': {'he': 'מחיר יעד', 'en': 'Target price'},
+    'alertAbove': {'he': 'מעל', 'en': 'Above'},
+    'alertBelow': {'he': 'מתחת', 'en': 'Below'},
+    'addAlert': {'he': 'הוסף התראה', 'en': 'Add Alert'},
+    'alertActive': {'he': 'פעיל', 'en': 'Active'},
+    'alertTriggered': {'he': 'הופעל', 'en': 'Triggered'},
+    'crossedAbove': {'he': 'עבר מעל', 'en': 'crossed above'},
+    'crossedBelow': {'he': 'ירד מתחת ל', 'en': 'dropped below'},
+    'currentPriceLabel': {'he': 'מחיר נוכחי', 'en': 'Current'},
     'upcomingEvents': {'he': 'אירועים צפויים', 'en': 'Upcoming Events'},
     'investmentThesis': {'he': 'תזת השקעה', 'en': 'Investment Thesis'},
     'catalystsTitle': {'he': 'קטליזטורים', 'en': 'Catalysts'},
@@ -397,6 +409,105 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   static const String _apiBase = 'https://finovam.ddns.net';
 
+  // ── Price alerts state ──
+  List<Map<String, dynamic>> _priceAlerts = [];
+  Timer? _alertsCheckTimer;
+  final TextEditingController _alertTickerController = TextEditingController();
+  final TextEditingController _alertPriceController = TextEditingController();
+  String _alertCondition = 'above';
+  bool _alertsBusy = false;
+
+  Future<void> _loadAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('finova_price_alerts');
+    if (raw == null) return;
+    try {
+      final decoded = (jsonDecode(raw) as List).map((e) => Map<String, dynamic>.from(e)).toList();
+      if (mounted) setState(() => _priceAlerts = decoded);
+    } catch (_) {}
+  }
+
+  Future<void> _saveAlerts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('finova_price_alerts', jsonEncode(_priceAlerts));
+  }
+
+  void _addAlert() {
+    final ticker = _alertTickerController.text.trim().toUpperCase();
+    final target = double.tryParse(_alertPriceController.text.trim());
+    if (ticker.isEmpty || target == null || target <= 0) return;
+
+    setState(() {
+      _priceAlerts.insert(0, {
+        'ticker': ticker,
+        'condition': _alertCondition,
+        'target': target,
+        'triggered': false,
+        'lastPrice': null,
+      });
+      _alertTickerController.clear();
+      _alertPriceController.clear();
+    });
+    _saveAlerts();
+  }
+
+  void _removeAlert(int index) {
+    setState(() => _priceAlerts.removeAt(index));
+    _saveAlerts();
+  }
+
+  Future<void> _checkAlerts() async {
+    if (_priceAlerts.isEmpty || _alertsBusy) return;
+    _alertsBusy = true;
+    try {
+      final activeTickers = _priceAlerts
+          .where((a) => a['triggered'] != true)
+          .map((a) => a['ticker'] as String)
+          .toSet();
+
+      final prices = <String, double>{};
+      for (final ticker in activeTickers) {
+        try {
+          final res = await http
+              .get(Uri.parse('$_apiBase/api/quote/${Uri.encodeComponent(ticker)}'))
+              .timeout(const Duration(seconds: 10));
+          if (res.statusCode == 200) {
+            final data = jsonDecode(res.body);
+            final price = (data['price'] as num?)?.toDouble() ?? 0;
+            if (price > 0) prices[ticker] = price;
+          }
+        } catch (_) {}
+      }
+      if (prices.isEmpty || !mounted) return;
+
+      String? firstTriggerMessage;
+      setState(() {
+        for (final alert in _priceAlerts) {
+          if (alert['triggered'] == true) continue;
+          final price = prices[alert['ticker']];
+          if (price == null) continue;
+          alert['lastPrice'] = price;
+          final target = (alert['target'] as num).toDouble();
+          final hit = alert['condition'] == 'above' ? price >= target : price <= target;
+          if (hit) {
+            alert['triggered'] = true;
+            firstTriggerMessage ??=
+                '${alert['ticker']} ${alert['condition'] == 'above' ? tr('crossedAbove') : tr('crossedBelow')} \$${target.toStringAsFixed(2)} — now \$${price.toStringAsFixed(2)}';
+          }
+        }
+      });
+      await _saveAlerts();
+
+      if (firstTriggerMessage != null && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(firstTriggerMessage!), duration: const Duration(seconds: 5)),
+        );
+      }
+    } finally {
+      _alertsBusy = false;
+    }
+  }
+
   Future<void> _toggleAdminSection() async {
     setState(() {
       _adminSectionOpen = !_adminSectionOpen;
@@ -519,6 +630,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         _refreshPrice(symbol);
       }
     });
+
+    _loadAlerts();
+    _alertsCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) => _checkAlerts());
   }
 
   @override
@@ -540,8 +654,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   void dispose() {
     _priceTimer?.cancel();
     _searchDebounce?.cancel();
+    _alertsCheckTimer?.cancel();
     _tabController.dispose();
     _searchController.dispose();
+    _adminPasswordController.dispose();
+    _finnhubController.dispose();
+    _groqController.dispose();
+    _geminiController.dispose();
+    _alertTickerController.dispose();
+    _alertPriceController.dispose();
     super.dispose();
   }
 
@@ -2526,9 +2647,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildAlertsScreen() {
     final textColor = Theme.of(context).textTheme.bodyMedium!.color!;
     final subTextColor = Theme.of(context).textTheme.bodySmall!.color!;
+    final cardColor = Theme.of(context).cardColor;
 
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -2536,19 +2658,28 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Text(tr('alerts'), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
             const SizedBox(height: 4),
             Text('Price & news notifications', style: TextStyle(fontSize: 13, color: subTextColor)),
-            const Spacer(),
-            Center(
-              child: Column(
-                children: [
-                  Icon(Icons.notifications_none_rounded, size: 80, color: subTextColor.withOpacity(0.4)),
-                  const SizedBox(height: 16),
-                  Text(tr('noAlerts'), style: TextStyle(fontSize: 18, color: textColor)),
-                  const SizedBox(height: 4),
-                  Text('Coming soon.', style: TextStyle(color: subTextColor)),
-                ],
+            const SizedBox(height: 20),
+            _buildAlertForm(textColor, subTextColor, cardColor),
+            const SizedBox(height: 20),
+            if (_priceAlerts.isEmpty)
+              Center(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 30),
+                    Icon(Icons.notifications_none_rounded, size: 72, color: subTextColor.withOpacity(0.4)),
+                    const SizedBox(height: 16),
+                    Text(tr('noAlerts'), style: TextStyle(fontSize: 18, color: textColor)),
+                    const SizedBox(height: 4),
+                    Text(tr('addAlertHint'), style: TextStyle(color: subTextColor)),
+                  ],
+                ),
+              )
+            else
+              ...List.generate(
+                _priceAlerts.length,
+                (i) => _buildAlertRow(i, textColor, subTextColor, cardColor),
               ),
-            ),
-            const Spacer(),
+            const SizedBox(height: 30),
             Center(
               child: Text('© 2026 Idan Amrani. All rights reserved.',
                   style: TextStyle(color: subTextColor.withOpacity(0.5), fontSize: 10)),
@@ -2556,6 +2687,161 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAlertForm(Color textColor, Color subTextColor, Color cardColor) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: TextField(
+                  controller: _alertTickerController,
+                  textCapitalization: TextCapitalization.characters,
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    labelText: tr('alertTicker'),
+                    hintText: 'NVDA',
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _alertPriceController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  style: TextStyle(color: textColor),
+                  decoration: InputDecoration(
+                    border: const OutlineInputBorder(),
+                    isDense: true,
+                    labelText: tr('alertPrice'),
+                    hintText: '200',
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _alertCondition = 'above'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _alertCondition == 'above'
+                          ? Theme.of(context).primaryColor
+                          : Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(tr('alertAbove'),
+                          style: TextStyle(
+                              color: _alertCondition == 'above' ? Colors.white : textColor,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => setState(() => _alertCondition = 'below'),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _alertCondition == 'below'
+                          ? Theme.of(context).primaryColor
+                          : Theme.of(context).scaffoldBackgroundColor,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Center(
+                      child: Text(tr('alertBelow'),
+                          style: TextStyle(
+                              color: _alertCondition == 'below' ? Colors.white : textColor,
+                              fontWeight: FontWeight.w700)),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              ElevatedButton(
+                onPressed: _addAlert,
+                style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                child: Text(tr('addAlert')),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAlertRow(int index, Color textColor, Color subTextColor, Color cardColor) {
+    final alert = _priceAlerts[index];
+    final bool triggered = alert['triggered'] == true;
+    final bool above = alert['condition'] == 'above';
+    final double target = (alert['target'] as num).toDouble();
+    final double? lastPrice = (alert['lastPrice'] as num?)?.toDouble();
+    final Color statusColor = triggered ? const Color(0xFF4ade80) : Theme.of(context).primaryColor;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: triggered ? Border.all(color: statusColor.withOpacity(0.5), width: 1.2) : null,
+      ),
+      child: Row(
+        children: [
+          Icon(above ? Icons.trending_up_rounded : Icons.trending_down_rounded, color: statusColor, size: 22),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(alert['ticker'] as String,
+                        style: TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: textColor)),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: statusColor.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(triggered ? tr('alertTriggered') : tr('alertActive'),
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: statusColor)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${above ? tr('alertAbove') : tr('alertBelow')} \$${target.toStringAsFixed(2)}'
+                  '${lastPrice != null ? '  ·  ${tr('currentPriceLabel')} \$${lastPrice.toStringAsFixed(2)}' : ''}',
+                  style: TextStyle(fontSize: 12.5, color: subTextColor),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.close_rounded, size: 18, color: subTextColor),
+            onPressed: () => _removeAlert(index),
+          ),
+        ],
       ),
     );
   }
