@@ -698,10 +698,42 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    final scaffold = Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: _buildBody(),
       bottomNavigationBar: _buildBottomNav(),
+    );
+
+    // במסך רחב (מחשב) - אותו עיצוב בדיוק, רק ממורכז ברוחב של טלפון
+    // כדי שלא יימתח מכוער על פני כל המסך
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const double breakpoint = 700;
+        const double phoneWidth = 430;
+        if (constraints.maxWidth <= breakpoint) return scaffold;
+
+        return ColoredBox(
+          color: widget.isDarkMode ? const Color(0xFF0b0b0f) : const Color(0xFFe4e7ee),
+          child: Center(
+            child: SizedBox(
+              width: phoneWidth,
+              height: constraints.maxHeight,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 40, spreadRadius: 2),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(28),
+                  child: scaffold,
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 
