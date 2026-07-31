@@ -51,6 +51,8 @@ class T {
     'normal': {'he': 'רגיל', 'en': 'Normal'},
     'large': {'he': 'גדול', 'en': 'Large'},
     'notFound': {'he': 'לא נמצאה מניה כזו', 'en': 'No such stock found'},
+    'analysisError': {'he': 'לא הצלחנו לטעון את הניתוח כרגע', 'en': "Couldn't load the analysis right now"},
+    'analysisErrorHint': {'he': 'זה בדרך כלל זמני - נסה שוב בעוד רגע', 'en': 'This is usually temporary - try again in a moment'},
     'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
     'searchToStart': {'he': 'חפש מניה כדי להתחיל', 'en': 'Search a stock to start'},
     'noAlerts': {'he': 'אין התראות עדיין', 'en': 'No alerts yet'},
@@ -361,6 +363,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   bool isLoading = false;
   bool isNotFound = false;
+  String _lastAttemptedTicker = "NVDA";
   Map<String, dynamic>? analysisData;
   Map<String, dynamic>? finovaScore;
 
@@ -544,6 +547,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Future<void> fetchStockData(String ticker) async {
     if (ticker.isEmpty) return;
+    _lastAttemptedTicker = ticker;
     setState(() {
       isLoading = true;
       isNotFound = false;
@@ -2472,11 +2476,16 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.search_off_rounded, size: 64, color: subTextColor),
+          Icon(Icons.error_outline_rounded, size: 64, color: subTextColor),
           const SizedBox(height: 16),
-          Text('Ticker not found.', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
+          Text(tr('analysisError'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
           const SizedBox(height: 4),
-          Text('Please check the symbol and try again.', style: TextStyle(color: subTextColor, fontSize: 13)),
+          Text(tr('analysisErrorHint'), style: TextStyle(color: subTextColor, fontSize: 13)),
+          const SizedBox(height: 20),
+          ElevatedButton(
+            onPressed: isLoading ? null : () => fetchStockData(_lastAttemptedTicker),
+            child: Text(tr('retry')),
+          ),
         ],
       ),
     );
