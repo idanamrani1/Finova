@@ -820,41 +820,37 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       bottomNavigationBar: _buildBottomNav(),
     );
 
-    // במסך רחב (מחשב) - אותו עיצוב בדיוק, ממורכז במסגרת בפרופורציית טלפון
-    // (הגודל משתנה יחסית לגודל המסך במקום קבוע, כדי שלא ייראה זעיר במסך גדול
-    // או צפוף במסך קטן - אבל תמיד שומר על אותה צורת טלפון)
+    // במסך רחב (מחשב) - אותו עיצוב בדיוק, ממורכז במסגרת בגודל טלפון קבוע לגמרי.
+    // בכוונה לא מחשבים גודל לפי גובה/רוחב החלון - כל חישוב כזה יצא שונה בכל
+    // מחשב/דפדפן/רזולוציה. הגודל תמיד זהה; אם החלון נמוך מדי, העמוד גולל.
     return LayoutBuilder(
       builder: (context, constraints) {
         const double breakpoint = 700;
-        const double aspect = 430 / 860; // width / height
-        const double minWidth = 360;
-        const double maxWidth = 480;
-        const double vPad = 64;
-        const double hPad = 48;
+        const double frameWidth = 430;
+        const double frameHeight = 860;
         if (constraints.maxWidth <= breakpoint) return scaffold;
-
-        final availH = constraints.maxHeight - vPad;
-        final availW = constraints.maxWidth - hPad;
-        double frameWidth = (availH * aspect).clamp(minWidth, maxWidth);
-        if (frameWidth > availW) frameWidth = availW.clamp(minWidth, maxWidth);
-        final frameHeight = frameWidth / aspect;
 
         return ColoredBox(
           color: widget.isDarkMode ? const Color(0xFF0b0b0f) : const Color(0xFFe4e7ee),
-          child: Center(
-            child: SizedBox(
-              width: frameWidth,
-              height: frameHeight,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(28),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 40, spreadRadius: 2),
-                  ],
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(28),
-                  child: scaffold,
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 32),
+              child: Center(
+                child: SizedBox(
+                  width: frameWidth,
+                  height: frameHeight,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(28),
+                      boxShadow: [
+                        BoxShadow(color: Colors.black.withOpacity(0.35), blurRadius: 40, spreadRadius: 2),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: scaffold,
+                    ),
+                  ),
                 ),
               ),
             ),
