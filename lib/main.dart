@@ -34,6 +34,17 @@ class T {
     'gotIt': {'he': 'הבנתי', 'en': 'Got it'},
     'keyStatistics': {'he': 'נתונים מרכזיים', 'en': 'Key Statistics'},
     'aiRecommendation': {'he': 'המלצת AI', 'en': 'AI RECOMMENDATION'},
+    'disclaimerShort': {
+      'he': 'לא ייעוץ השקעות. למידע בלבד.',
+      'en': 'Not investment advice. For information only.'
+    },
+    'disclaimerFull': {
+      'he':
+          'התוכן באפליקציה נוצר אוטומטית על ידי בינה מלאכותית ומבוסס על נתוני שוק ממקורות חיצוניים. הוא אינו מהווה ייעוץ השקעות, שיווק השקעות או המלצה לביצוע פעולה בניירות ערך, ואינו מתחשב בנתונים או בצרכים האישיים שלך. ייתכנו טעויות, אי-דיוקים ועיכובים בנתונים. כל החלטת השקעה היא באחריותך בלבד.',
+      'en':
+          'Content in this app is generated automatically by AI from third-party market data. It is not investment advice, a solicitation, or a recommendation to buy or sell any security, and does not account for your personal circumstances. Data may be inaccurate, incomplete, or delayed. Any investment decision is solely your own responsibility.'
+    },
+    'disclaimerTitle': {'he': 'הבהרה משפטית', 'en': 'Disclaimer'},
     'verdict': {'he': 'הערכה', 'en': 'VERDICT'},
     'confidence': {'he': 'ביטחון', 'en': 'CONFIDENCE'},
     'tapForDetails': {'he': 'הקש לפרטים', 'en': 'Tap for details'},
@@ -2532,6 +2543,21 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            // הבהרה: זו לא המלצת השקעה
+            Row(
+              children: [
+                Icon(Icons.info_outline, size: 11, color: Colors.white.withOpacity(0.35)),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(tr('disclaimerShort'),
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.35),
+                          fontSize: 10,
+                          height: 1.3)),
+                ),
+              ],
+            ),
           ],
         ),
       ),
@@ -3178,6 +3204,34 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
             const SizedBox(height: 20),
             _buildAdminSection(textColor, cardColor, subTextColor),
+
+            const SizedBox(height: 20),
+            // הבהרה משפטית מלאה
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _overlay(0.08), width: 1),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.gavel_rounded, size: 17, color: subTextColor),
+                      const SizedBox(width: 8),
+                      Text(tr('disclaimerTitle'),
+                          style: TextStyle(
+                              color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(tr('disclaimerFull'),
+                      style: TextStyle(color: subTextColor, fontSize: 11.5, height: 1.55)),
+                ],
+              ),
+            ),
 
             const SizedBox(height: 40),
             Center(
