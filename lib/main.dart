@@ -376,6 +376,135 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   final List<String> popularTickers = ['NVDA', 'AAPL', 'MSFT', 'PLTR', 'UBER', 'TSLA'];
 
+  // ── Admin API-keys section state ──
+  bool _adminSectionOpen = false;
+  bool _adminStatusLoaded = false;
+  bool _adminConfigured = false;
+  String? _adminToken;
+  bool _adminBusy = false;
+  String? _adminError;
+  String? _adminMessage;
+  final TextEditingController _adminPasswordController = TextEditingController();
+  final TextEditingController _finnhubController = TextEditingController();
+  final TextEditingController _groqController = TextEditingController();
+  final TextEditingController _geminiController = TextEditingController();
+  String _finnhubMasked = '';
+  String _groqMasked = '';
+  String _geminiMasked = '';
+
+  static const String _apiBase = 'https://finovam.ddns.net';
+
+  Future<void> _toggleAdminSection() async {
+    setState(() {
+      _adminSectionOpen = !_adminSectionOpen;
+      _adminError = null;
+      _adminMessage = null;
+    });
+    if (_adminSectionOpen && !_adminStatusLoaded) {
+      try {
+        final res = await http.get(Uri.parse('$_apiBase/api/admin/status'));
+        if (res.statusCode == 200) {
+          final data = jsonDecode(res.body);
+          setState(() {
+            _adminConfigured = data['configured'] == true;
+            _adminStatusLoaded = true;
+          });
+        }
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _submitAdminPassword() async {
+    final password = _adminPasswordController.text;
+    if (password.isEmpty) return;
+    setState(() {
+      _adminBusy = true;
+      _adminError = null;
+    });
+    try {
+      final endpoint = _adminConfigured ? 'login' : 'setup';
+      final res = await http.post(
+        Uri.parse('$_apiBase/api/admin/$endpoint'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'password': password}),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _adminToken = data['token'];
+          _adminConfigured = true;
+          _adminPasswordController.clear();
+        });
+        await _loadAdminKeys();
+      } else if (res.statusCode == 429) {
+        setState(() => _adminError = 'יותר מדי ניסיונות, נסה שוב בעוד כמה דקות');
+      } else {
+        setState(() => _adminError = 'סיסמה שגויה');
+      }
+    } catch (_) {
+      setState(() => _adminError = 'שגיאת חיבור לשרת');
+    } finally {
+      setState(() => _adminBusy = false);
+    }
+  }
+
+  Future<void> _loadAdminKeys() async {
+    if (_adminToken == null) return;
+    try {
+      final res = await http.get(
+        Uri.parse('$_apiBase/api/admin/keys'),
+        headers: {'Authorization': 'Bearer $_adminToken'},
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _finnhubMasked = data['finnhubKey'] ?? '';
+          _groqMasked = data['groqKey'] ?? '';
+          _geminiMasked = data['geminiKey'] ?? '';
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _saveAdminKeys() async {
+    if (_adminToken == null) return;
+    setState(() {
+      _adminBusy = true;
+      _adminError = null;
+      _adminMessage = null;
+    });
+    try {
+      final body = <String, String>{};
+      if (_finnhubController.text.trim().isNotEmpty) body['finnhubKey'] = _finnhubController.text.trim();
+      if (_groqController.text.trim().isNotEmpty) body['groqKey'] = _groqController.text.trim();
+      if (_geminiController.text.trim().isNotEmpty) body['geminiKey'] = _geminiController.text.trim();
+
+      final res = await http.post(
+        Uri.parse('$_apiBase/api/admin/keys'),
+        headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_adminToken'},
+        body: jsonEncode(body),
+      );
+      if (res.statusCode == 200) {
+        _finnhubController.clear();
+        _groqController.clear();
+        _geminiController.clear();
+        setState(() => _adminMessage = 'נשמר בהצלחה');
+        await _loadAdminKeys();
+      } else if (res.statusCode == 401) {
+        setState(() {
+          _adminToken = null;
+          _adminError = 'ההתחברות פגה, יש להתחבר שוב';
+        });
+      } else {
+        setState(() => _adminError = 'שמירה נכשלה');
+      }
+    } catch (_) {
+      setState(() => _adminError = 'שגיאת חיבור לשרת');
+    } finally {
+      setState(() => _adminBusy = false);
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -423,7 +552,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     });
 
     final url = Uri.parse(
-      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
+      'https://finovam.ddns.net/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
     );
 
     try {
@@ -482,7 +611,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Future<void> _fetchSuggestions(String query) async {
     setState(() => isSearching = true);
     final url = Uri.parse(
-      'https://equity-research-backend.onrender.com/api/search/${Uri.encodeComponent(query)}',
+      'https://finovam.ddns.net/api/search/${Uri.encodeComponent(query)}',
     );
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 15));
@@ -515,7 +644,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Future<void> _refreshPrice(String ticker) async {
     final url = Uri.parse(
-      'https://equity-research-backend.onrender.com/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
+      'https://finovam.ddns.net/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
     );
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 30));
@@ -540,7 +669,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       briefError = false;
     });
 
-    final url = Uri.parse('https://equity-research-backend.onrender.com/api/daily-brief?lang=${widget.lang}');
+    final url = Uri.parse('https://finovam.ddns.net/api/daily-brief?lang=${widget.lang}');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 120));
@@ -2539,6 +2668,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               ],
             ),
 
+            const SizedBox(height: 20),
+            _buildAdminSection(textColor, cardColor, subTextColor),
+
             const SizedBox(height: 40),
             Center(
               child: Text('© 2025 Idan Amrani. All rights reserved.',
@@ -2548,6 +2680,135 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAdminSection(Color textColor, Color cardColor, Color subTextColor) {
+    return Container(
+      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: _toggleAdminSection,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, color: Theme.of(context).primaryColor, size: 20),
+                  const SizedBox(width: 10),
+                  Text('מפתחות API (פרטי)', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
+                  const Spacer(),
+                  Icon(_adminSectionOpen ? Icons.expand_less : Icons.expand_more, color: subTextColor),
+                ],
+              ),
+            ),
+          ),
+          if (_adminSectionOpen)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              child: _adminToken == null
+                  ? _buildAdminLoginForm(textColor, subTextColor)
+                  : _buildAdminKeysForm(textColor, subTextColor),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAdminLoginForm(Color textColor, Color subTextColor) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          _adminStatusLoaded && !_adminConfigured
+              ? 'הגדר סיסמת ניהול (לפחות 8 תווים) - תישאר רק אצלך'
+              : 'הכנס את סיסמת הניהול כדי לערוך את מפתחות ה-API',
+          style: TextStyle(color: subTextColor, fontSize: 12),
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _adminPasswordController,
+          obscureText: true,
+          style: TextStyle(color: textColor),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            isDense: true,
+            hintText: 'סיסמה',
+          ),
+          onSubmitted: (_) => _submitAdminPassword(),
+        ),
+        const SizedBox(height: 10),
+        if (_adminError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_adminError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+          ),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            onPressed: _adminBusy ? null : _submitAdminPassword,
+            child: Text(_adminBusy
+                ? '...'
+                : (_adminStatusLoaded && !_adminConfigured ? 'הגדר סיסמה' : 'התחבר')),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdminKeysForm(Color textColor, Color subTextColor) {
+    Widget field(TextEditingController controller, String label, String masked) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: controller,
+          style: TextStyle(color: textColor),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
+            isDense: true,
+            labelText: label,
+            hintText: masked.isNotEmpty ? 'נוכחי: $masked' : 'לא הוגדר',
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('הזן ערך חדש רק בשדה שברצונך לעדכן', style: TextStyle(color: subTextColor, fontSize: 12)),
+        const SizedBox(height: 10),
+        field(_finnhubController, 'FINNHUB_KEY', _finnhubMasked),
+        field(_groqController, 'GROQ_KEY', _groqMasked),
+        field(_geminiController, 'GEMINI_KEY', _geminiMasked),
+        if (_adminError != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_adminError!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+          ),
+        if (_adminMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(_adminMessage!, style: const TextStyle(color: Colors.greenAccent, fontSize: 12)),
+          ),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton(
+                onPressed: _adminBusy ? null : _saveAdminKeys,
+                child: Text(_adminBusy ? '...' : 'שמור'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            TextButton(
+              onPressed: () => setState(() => _adminToken = null),
+              child: const Text('נעל'),
+            ),
+          ],
+        ),
+      ],
     );
   }
 
