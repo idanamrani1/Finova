@@ -825,23 +825,30 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       bottomNavigationBar: _buildBottomNav(),
     );
 
-    // במסך רחב (מחשב) - אותו עיצוב בדיוק, רק ממורכז ברוחב וגובה של טלפון
-    // (גובה קבוע ולא כל גובה החלון, אחרת זה נראה שונה לגמרי בכל רזולוציה)
+    // במסך רחב (מחשב) - אותו עיצוב בדיוק, ממורכז במסגרת בפרופורציית טלפון
+    // (הגודל משתנה יחסית לגודל המסך במקום קבוע, כדי שלא ייראה זעיר במסך גדול
+    // או צפוף במסך קטן - אבל תמיד שומר על אותה צורת טלפון)
     return LayoutBuilder(
       builder: (context, constraints) {
         const double breakpoint = 700;
-        const double phoneWidth = 430;
-        const double phoneHeight = 860;
+        const double aspect = 430 / 860; // width / height
+        const double minWidth = 360;
+        const double maxWidth = 480;
+        const double vPad = 64;
+        const double hPad = 48;
         if (constraints.maxWidth <= breakpoint) return scaffold;
 
-        final frameHeight =
-            constraints.maxHeight < phoneHeight + 48 ? constraints.maxHeight - 48 : phoneHeight;
+        final availH = constraints.maxHeight - vPad;
+        final availW = constraints.maxWidth - hPad;
+        double frameWidth = (availH * aspect).clamp(minWidth, maxWidth);
+        if (frameWidth > availW) frameWidth = availW.clamp(minWidth, maxWidth);
+        final frameHeight = frameWidth / aspect;
 
         return ColoredBox(
           color: widget.isDarkMode ? const Color(0xFF0b0b0f) : const Color(0xFFe4e7ee),
           child: Center(
             child: SizedBox(
-              width: phoneWidth,
+              width: frameWidth,
               height: frameHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
