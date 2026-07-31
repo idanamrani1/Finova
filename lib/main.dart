@@ -3,7 +3,23 @@ import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
+import 'dart:js_interop';
 import 'package:shared_preferences/shared_preferences.dart';
+
+// ───────────────────────────────────────────
+// גשר ל-JS של התראות דחיפה (מוגדר ב-index.html)
+// ───────────────────────────────────────────
+@JS('finovaPush.supported')
+external bool _jsPushSupported();
+
+@JS('finovaPush.subscribe')
+external JSPromise<JSString> _jsPushSubscribe(JSString vapidKey);
+
+@JS('finovaPush.current')
+external JSPromise<JSString> _jsPushCurrent();
+
+@JS('finovaPush.unsubscribe')
+external JSPromise<JSString> _jsPushUnsubscribe();
 
 // ───────────────────────────────────────────
 // מערכת תרגום - כל הטקסטים בממשק
@@ -83,6 +99,27 @@ class T {
     'alertTriggered': {'he': 'הופעל', 'en': 'Triggered'},
     'crossedAbove': {'he': 'עבר מעל', 'en': 'crossed above'},
     'crossedBelow': {'he': 'ירד מתחת ל', 'en': 'dropped below'},
+    'pushTitle': {'he': 'התראות לנייד', 'en': 'Push notifications'},
+    'pushOnHint': {
+      'he': 'פעיל - תקבל התראה גם כשהאפליקציה סגורה',
+      'en': "On - you'll be notified even when the app is closed"
+    },
+    'pushOffHint': {
+      'he': 'כרגע ההתראות עובדות רק כשהאפליקציה פתוחה',
+      'en': 'Right now alerts only work while the app is open'
+    },
+    'pushEnable': {'he': 'הפעל התראות', 'en': 'Enable'},
+    'pushDisable': {'he': 'כבה', 'en': 'Turn off'},
+    'pushEnabled': {'he': 'התראות הופעלו', 'en': 'Notifications enabled'},
+    'pushDenied': {
+      'he': 'ההרשאה נדחתה - יש לאפשר התראות בהגדרות הדפדפן',
+      'en': 'Permission denied - allow notifications in your browser settings'
+    },
+    'pushFailed': {'he': 'הפעלת ההתראות נכשלה', 'en': 'Could not enable notifications'},
+    'pushUnsupported': {
+      'he': 'הדפדפן הזה לא תומך בהתראות. באייפון: הוסף את האתר למסך הבית ופתח אותו משם.',
+      'en': 'This browser does not support notifications. On iPhone: add the site to your Home Screen and open it from there.'
+    },
     'currentPriceLabel': {'he': 'מחיר נוכחי', 'en': 'Current'},
     'close': {'he': 'סגור', 'en': 'Close'},
     'whyRec': {'he': 'למה', 'en': 'Why'},
@@ -472,6 +509,143 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Future<void> _saveAlerts() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('finova_price_alerts', jsonEncode(_priceAlerts));
+    // מסנכרנים לשרת כדי שההתראות יעבדו גם כשהאפליקציה סגורה
+    unawaited(_syncAlertsToServer());
+  }
+
+  // ── התראות דחיפה (Web Push) ──
+  bool _pushSupported = false;
+  bool _pushEnabled = false;
+  bool _pushBusy = false;
+  String? _pushEndpoint;
+
+  Future<void> _initPush() async {
+    try {
+      _pushSupported = _jsPushSupported();
+    } catch (_) {
+      _pushSupported = false;
+    }
+    if (!_pushSupported) {
+      if (mounted) setState(() {});
+      return;
+    }
+    try {
+      // אם המשתמש כבר אישר בעבר - מתחברים בשקט, בלי לבקש הרשאה שוב
+      final raw = (await _jsPushCurrent().toDart).toDart;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final endpoint = data['endpoint'] as String?;
+      if (endpoint != null && endpoint.isNotEmpty) {
+        _pushEndpoint = endpoint;
+        _pushEnabled = true;
+        await _registerSubscription(data);
+      }
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _enablePush() async {
+    if (_pushBusy) return;
+    setState(() => _pushBusy = true);
+    try {
+      final keyRes = await http
+          .get(Uri.parse('$_apiBase/api/push/key'))
+          .timeout(const Duration(seconds: 15));
+      if (keyRes.statusCode != 200) throw Exception('no key');
+      final publicKey = (jsonDecode(keyRes.body)['publicKey'] as String?) ?? '';
+      if (publicKey.isEmpty) throw Exception('empty key');
+
+      final raw = (await _jsPushSubscribe(publicKey.toJS).toDart).toDart;
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+
+      if (data['error'] != null) {
+        if (!mounted) return;
+        final err = data['error'].toString();
+        _showSnack(err == 'denied' ? tr('pushDenied') : tr('pushFailed'));
+        return;
+      }
+
+      await _registerSubscription(data);
+      if (!mounted) return;
+      setState(() {
+        _pushEndpoint = data['endpoint'] as String?;
+        _pushEnabled = true;
+      });
+      await _syncAlertsToServer();
+      if (mounted) _showSnack(tr('pushEnabled'));
+    } catch (_) {
+      if (mounted) _showSnack(tr('pushFailed'));
+    } finally {
+      if (mounted) setState(() => _pushBusy = false);
+    }
+  }
+
+  Future<void> _disablePush() async {
+    if (_pushBusy) return;
+    setState(() => _pushBusy = true);
+    try {
+      final endpoint = _pushEndpoint;
+      await _jsPushUnsubscribe().toDart;
+      if (endpoint != null) {
+        await http
+            .post(Uri.parse('$_apiBase/api/push/unsubscribe'),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'endpoint': endpoint}))
+            .timeout(const Duration(seconds: 15));
+      }
+      if (!mounted) return;
+      setState(() {
+        _pushEnabled = false;
+        _pushEndpoint = null;
+      });
+    } catch (_) {
+    } finally {
+      if (mounted) setState(() => _pushBusy = false);
+    }
+  }
+
+  Future<void> _registerSubscription(Map<String, dynamic> data) async {
+    try {
+      await http
+          .post(Uri.parse('$_apiBase/api/push/subscribe'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'endpoint': data['endpoint'],
+                'p256dh': data['p256dh'],
+                'auth': data['auth'],
+                'lang': widget.lang,
+              }))
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {}
+  }
+
+  Future<void> _syncAlertsToServer() async {
+    final endpoint = _pushEndpoint;
+    if (endpoint == null || !_pushEnabled) return;
+    try {
+      await http
+          .post(Uri.parse('$_apiBase/api/push/alerts'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'endpoint': endpoint,
+                'alerts': _priceAlerts
+                    .map((a) => {
+                          'id': a['id'],
+                          'ticker': a['ticker'],
+                          'condition': a['condition'],
+                          'target': a['target'],
+                          'triggered': a['triggered'] == true,
+                          'lang': widget.lang,
+                        })
+                    .toList(),
+              }))
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {}
+  }
+
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg), duration: const Duration(seconds: 3)),
+    );
   }
 
   void _addAlert() {
@@ -482,6 +656,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     HapticFeedback.lightImpact();
     setState(() {
       _priceAlerts.insert(0, {
+        // מזהה יציב כדי שהשרת יוכל לסמן התראה כ"הופעלה"
+        'id': DateTime.now().microsecondsSinceEpoch.toRadixString(36),
         'ticker': ticker,
         'condition': _alertCondition,
         'target': target,
@@ -681,6 +857,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     });
 
     _loadAlerts();
+    _initPush();
     _alertsCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) => _checkAlerts());
   }
 
@@ -2866,6 +3043,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             const SizedBox(height: 4),
             Text(tr('alertsSubtitle'), style: TextStyle(fontSize: 13, color: subTextColor)),
             const SizedBox(height: 20),
+            _buildPushCard(textColor, subTextColor, cardColor),
+            const SizedBox(height: 14),
             _buildAlertForm(textColor, subTextColor, cardColor),
             const SizedBox(height: 20),
             if (_priceAlerts.isEmpty)
@@ -2894,6 +3073,63 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             const SizedBox(height: 8),
           ],
         ),
+      ),
+    );
+  }
+
+  // כרטיס הפעלת התראות דחיפה - זה מה שהופך התראות לשימושיות באמת
+  Widget _buildPushCard(Color textColor, Color subTextColor, Color cardColor) {
+    final primary = Theme.of(context).primaryColor;
+    final active = _pushEnabled;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: active ? const Color(0xFF4ade80).withOpacity(0.4) : _overlay(0.08),
+          width: 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            active ? Icons.notifications_active_rounded : Icons.notifications_off_outlined,
+            color: active ? const Color(0xFF4ade80) : subTextColor,
+            size: 22,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(tr('pushTitle'),
+                    style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14)),
+                const SizedBox(height: 3),
+                Text(
+                  !_pushSupported
+                      ? tr('pushUnsupported')
+                      : (active ? tr('pushOnHint') : tr('pushOffHint')),
+                  style: TextStyle(color: subTextColor, fontSize: 11.5, height: 1.4),
+                ),
+              ],
+            ),
+          ),
+          if (_pushSupported) ...[
+            const SizedBox(width: 10),
+            _pushBusy
+                ? SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: primary),
+                  )
+                : TextButton(
+                    onPressed: active ? _disablePush : _enablePush,
+                    child: Text(active ? tr('pushDisable') : tr('pushEnable')),
+                  ),
+          ],
+        ],
       ),
     );
   }

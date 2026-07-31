@@ -41,6 +41,101 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!--
+    Push-notification bridge for price alerts. Exposed on window so the Dart
+    side can call it; kept in plain JS because the subscription APIs are
+    browser-only. Returns plain JSON strings for easy interop.
+  -->
+  <script>
+    (function () {
+      function urlBase64ToUint8Array(base64String) {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+        const raw = window.atob(base64);
+        const output = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; ++i) output[i] = raw.charCodeAt(i);
+        return output;
+      }
+
+      function bufToBase64Url(buf) {
+        const bytes = new Uint8Array(buf);
+        let str = '';
+        for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
+        return window.btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      }
+
+      window.finovaPush = {
+        supported: function () {
+          return ('serviceWorker' in navigator) && ('PushManager' in window) && ('Notification' in window);
+        },
+
+        permission: function () {
+          return ('Notification' in window) ? Notification.permission : 'unsupported';
+        },
+
+        // Registers the SW, asks permission, subscribes. Returns a JSON string
+        // {endpoint, p256dh, auth} or {error: "..."} - never throws into Dart.
+        subscribe: async function (vapidPublicKey) {
+          try {
+            if (!this.supported()) return JSON.stringify({ error: 'unsupported' });
+
+            const permission = await Notification.requestPermission();
+            if (permission !== 'granted') return JSON.stringify({ error: 'denied' });
+
+            const reg = await navigator.serviceWorker.register('push-sw.js');
+            await navigator.serviceWorker.ready;
+
+            let sub = await reg.pushManager.getSubscription();
+            if (!sub) {
+              sub = await reg.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: urlBase64ToUint8Array(vapidPublicKey),
+              });
+            }
+
+            return JSON.stringify({
+              endpoint: sub.endpoint,
+              p256dh: bufToBase64Url(sub.getKey('p256dh')),
+              auth: bufToBase64Url(sub.getKey('auth')),
+            });
+          } catch (e) {
+            return JSON.stringify({ error: String(e && e.message ? e.message : e) });
+          }
+        },
+
+        // Returns the existing subscription without prompting, or {} if none.
+        current: async function () {
+          try {
+            if (!this.supported()) return JSON.stringify({});
+            const reg = await navigator.serviceWorker.getRegistration('push-sw.js');
+            if (!reg) return JSON.stringify({});
+            const sub = await reg.pushManager.getSubscription();
+            if (!sub) return JSON.stringify({});
+            return JSON.stringify({
+              endpoint: sub.endpoint,
+              p256dh: bufToBase64Url(sub.getKey('p256dh')),
+              auth: bufToBase64Url(sub.getKey('auth')),
+            });
+          } catch (e) {
+            return JSON.stringify({});
+          }
+        },
+
+        unsubscribe: async function () {
+          try {
+            const reg = await navigator.serviceWorker.getRegistration('push-sw.js');
+            if (!reg) return JSON.stringify({ success: true });
+            const sub = await reg.pushManager.getSubscription();
+            if (sub) await sub.unsubscribe();
+            return JSON.stringify({ success: true });
+          } catch (e) {
+            return JSON.stringify({ error: String(e) });
+          }
+        },
+      };
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
