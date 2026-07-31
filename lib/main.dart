@@ -69,6 +69,26 @@ class T {
     'crossedAbove': {'he': 'עבר מעל', 'en': 'crossed above'},
     'crossedBelow': {'he': 'ירד מתחת ל', 'en': 'dropped below'},
     'currentPriceLabel': {'he': 'מחיר נוכחי', 'en': 'Current'},
+    'close': {'he': 'סגור', 'en': 'Close'},
+    'whyRec': {'he': 'למה', 'en': 'Why'},
+    'alertsSubtitle': {'he': 'התראות מחיר וחדשות', 'en': 'Price & news notifications'},
+    'apiKeysPrivate': {'he': 'מפתחות API (פרטי)', 'en': 'API Keys (private)'},
+    'password': {'he': 'סיסמה', 'en': 'Password'},
+    'setPassword': {'he': 'הגדר סיסמה', 'en': 'Set password'},
+    'login': {'he': 'התחבר', 'en': 'Log in'},
+    'save': {'he': 'שמור', 'en': 'Save'},
+    'lock': {'he': 'נעל', 'en': 'Lock'},
+    'savedOk': {'he': 'נשמר בהצלחה', 'en': 'Saved'},
+    'saveFailed': {'he': 'שמירה נכשלה', 'en': 'Save failed'},
+    'wrongPassword': {'he': 'סיסמה שגויה', 'en': 'Wrong password'},
+    'tooManyAttempts': {'he': 'יותר מדי ניסיונות, נסה שוב בעוד כמה דקות', 'en': 'Too many attempts, try again in a few minutes'},
+    'connectionError': {'he': 'שגיאת חיבור לשרת', 'en': 'Connection error'},
+    'sessionExpired': {'he': 'ההתחברות פגה, יש להתחבר שוב', 'en': 'Session expired, please log in again'},
+    'setPasswordHint': {'he': 'הגדר סיסמת ניהול (לפחות 8 תווים) - תישאר רק אצלך', 'en': 'Set an admin password (min 8 characters) - stays only with you'},
+    'enterPasswordHint': {'he': 'הכנס את סיסמת הניהול כדי לערוך את מפתחות ה-API', 'en': 'Enter the admin password to edit the API keys'},
+    'onlyFillToChange': {'he': 'הזן ערך חדש רק בשדה שברצונך לעדכן', 'en': 'Only fill in a field you want to change'},
+    'notSet': {'he': 'לא הוגדר', 'en': 'Not set'},
+    'currentMasked': {'he': 'נוכחי', 'en': 'Current'},
     'upcomingEvents': {'he': 'אירועים צפויים', 'en': 'Upcoming Events'},
     'investmentThesis': {'he': 'תזת השקעה', 'en': 'Investment Thesis'},
     'catalystsTitle': {'he': 'קטליזטורים', 'en': 'Catalysts'},
@@ -368,6 +388,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   int _selectedIndex = 0;
   String symbol = "NVDA";
+  String exchange = "";
   String currentPrice = "...";
   Timer? _priceTimer;
 
@@ -555,12 +576,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         });
         await _loadAdminKeys();
       } else if (res.statusCode == 429) {
-        setState(() => _adminError = 'יותר מדי ניסיונות, נסה שוב בעוד כמה דקות');
+        setState(() => _adminError = tr('tooManyAttempts'));
       } else {
-        setState(() => _adminError = 'סיסמה שגויה');
+        setState(() => _adminError = tr('wrongPassword'));
       }
     } catch (_) {
-      setState(() => _adminError = 'שגיאת חיבור לשרת');
+      setState(() => _adminError = tr('connectionError'));
     } finally {
       setState(() => _adminBusy = false);
     }
@@ -606,18 +627,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         _finnhubController.clear();
         _groqController.clear();
         _geminiController.clear();
-        setState(() => _adminMessage = 'נשמר בהצלחה');
+        setState(() => _adminMessage = tr('savedOk'));
         await _loadAdminKeys();
       } else if (res.statusCode == 401) {
         setState(() {
           _adminToken = null;
-          _adminError = 'ההתחברות פגה, יש להתחבר שוב';
+          _adminError = tr('sessionExpired');
         });
       } else {
-        setState(() => _adminError = 'שמירה נכשלה');
+        setState(() => _adminError = tr('saveFailed'));
       }
     } catch (_) {
-      setState(() => _adminError = 'שגיאת חיבור לשרת');
+      setState(() => _adminError = tr('connectionError'));
     } finally {
       setState(() => _adminBusy = false);
     }
@@ -690,6 +711,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         final data = json.decode(response.body);
         setState(() {
           symbol = data['symbol'];
+          exchange = (data['exchange'] as String?)?.trim() ?? '';
           currentPrice = '\$${data['currentPrice']}';
           dailyChange = data['dailyChange'] != null ? (data['dailyChange'] as num).toDouble() : null;
           if (data['chartData'] != null) {
@@ -1001,19 +1023,22 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                     color: Colors.white,
                                     letterSpacing: -0.5)),
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.08),
-                                borderRadius: BorderRadius.circular(7),
+                            // תווית הבורסה האמיתית מהשרת (מוסתרת אם לא ידועה,
+                            // עדיף כלום מאשר להציג בורסה שגויה)
+                            if (exchange.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(7),
+                                ),
+                                child: Text(exchange,
+                                    style: const TextStyle(
+                                        fontSize: 10,
+                                        color: Color(0xFFB8B8D0),
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.5)),
                               ),
-                              child: const Text('NASDAQ',
-                                  style: TextStyle(
-                                      fontSize: 10,
-                                      color: Color(0xFFB8B8D0),
-                                      fontWeight: FontWeight.w600,
-                                      letterSpacing: 0.5)),
-                            ),
                             const Spacer(),
                             // אינדיקטור LIVE עם נקודה פועמת
                             _PulsingLiveDot(),
@@ -1283,14 +1308,18 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   ? Center(
                       key: const ValueKey('empty'),
                       child: Text(tr('searchToStart'), style: TextStyle(color: subTextColor)))
-                  : TabBarView(
+                  : RefreshIndicator(
                 key: ValueKey('content_$symbol'),
-                controller: _tabController,
-                children: [
-                  _buildSummaryTab(),
-                  _buildFundamentalsTab(),
-                  _buildCatalystsTab(),
-                ],
+                color: Theme.of(context).primaryColor,
+                onRefresh: () => fetchStockData(symbol),
+                child: TabBarView(
+                  controller: _tabController,
+                  children: [
+                    _buildSummaryTab(),
+                    _buildFundamentalsTab(),
+                    _buildCatalystsTab(),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1356,7 +1385,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
         )
             : dailyBriefData == null
-            ? Center(child: Text('טוען סיכום...', style: TextStyle(color: subTextColor)))
+            ? Center(child: Text(tr('loadingBrief'), style: TextStyle(color: subTextColor)))
             : _buildBriefContent(),
       ),
     );
@@ -1379,7 +1408,14 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     // 3 מדדים מובילים לתצוגה בכרטיס הכותרת
     final topMarketKeys = markets.keys.take(3).toList();
 
-    return SingleChildScrollView(
+    return RefreshIndicator(
+      color: Theme.of(context).primaryColor,
+      onRefresh: () async {
+        setState(() => dailyBriefData = null);
+        await fetchDailyBrief();
+      },
+      child: SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 16, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1706,6 +1742,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
         ],
       ),
+      ),
     );
   }
 
@@ -1791,6 +1828,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildSummaryTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1829,6 +1867,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildFundamentalsTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1848,6 +1887,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Widget _buildCatalystsTab() {
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.fromLTRB(18, 4, 18, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1886,7 +1926,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 children: [
                   Icon(Icons.psychology_outlined, color: color, size: 24),
                   const SizedBox(width: 8),
-                  Text('Why $rec?',
+                  Text("${tr('whyRec')} $rec?",
                       style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.bold)),
                 ],
               ),
@@ -1900,7 +1940,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 alignment: Alignment.centerRight,
                 child: TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: Text('Close', style: TextStyle(color: Theme.of(context).primaryColor)),
+                  child: Text(tr('close'), style: TextStyle(color: Theme.of(context).primaryColor)),
                 ),
               ),
             ],
@@ -2687,7 +2727,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           children: [
             Text(tr('alerts'), style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: textColor)),
             const SizedBox(height: 4),
-            Text('Price & news notifications', style: TextStyle(fontSize: 13, color: subTextColor)),
+            Text(tr('alertsSubtitle'), style: TextStyle(fontSize: 13, color: subTextColor)),
             const SizedBox(height: 20),
             _buildAlertForm(textColor, subTextColor, cardColor),
             const SizedBox(height: 20),
@@ -3055,7 +3095,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 children: [
                   Icon(Icons.lock_outline, color: Theme.of(context).primaryColor, size: 20),
                   const SizedBox(width: 10),
-                  Text('מפתחות API (פרטי)', style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
+                  Text(tr('apiKeysPrivate'), style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 15)),
                   const Spacer(),
                   Icon(_adminSectionOpen ? Icons.expand_less : Icons.expand_more, color: subTextColor),
                 ],
@@ -3080,8 +3120,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       children: [
         Text(
           _adminStatusLoaded && !_adminConfigured
-              ? 'הגדר סיסמת ניהול (לפחות 8 תווים) - תישאר רק אצלך'
-              : 'הכנס את סיסמת הניהול כדי לערוך את מפתחות ה-API',
+              ? tr('setPasswordHint')
+              : tr('enterPasswordHint'),
           style: TextStyle(color: subTextColor, fontSize: 12),
         ),
         const SizedBox(height: 10),
@@ -3089,10 +3129,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           controller: _adminPasswordController,
           obscureText: true,
           style: TextStyle(color: textColor),
-          decoration: const InputDecoration(
-            border: OutlineInputBorder(),
+          decoration: InputDecoration(
+            border: const OutlineInputBorder(),
             isDense: true,
-            hintText: 'סיסמה',
+            hintText: tr('password'),
           ),
           onSubmitted: (_) => _submitAdminPassword(),
         ),
@@ -3108,7 +3148,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             onPressed: _adminBusy ? null : _submitAdminPassword,
             child: Text(_adminBusy
                 ? '...'
-                : (_adminStatusLoaded && !_adminConfigured ? 'הגדר סיסמה' : 'התחבר')),
+                : (_adminStatusLoaded && !_adminConfigured ? tr('setPassword') : tr('login'))),
           ),
         ),
       ],
@@ -3126,7 +3166,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             border: const OutlineInputBorder(),
             isDense: true,
             labelText: label,
-            hintText: masked.isNotEmpty ? 'נוכחי: $masked' : 'לא הוגדר',
+            hintText: masked.isNotEmpty ? "${tr('currentMasked')}: $masked" : tr('notSet'),
           ),
         ),
       );
@@ -3135,7 +3175,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('הזן ערך חדש רק בשדה שברצונך לעדכן', style: TextStyle(color: subTextColor, fontSize: 12)),
+        Text(tr('onlyFillToChange'), style: TextStyle(color: subTextColor, fontSize: 12)),
         const SizedBox(height: 10),
         field(_finnhubController, 'FINNHUB_KEY', _finnhubMasked),
         field(_groqController, 'GROQ_KEY', _groqMasked),
@@ -3155,13 +3195,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             Expanded(
               child: ElevatedButton(
                 onPressed: _adminBusy ? null : _saveAdminKeys,
-                child: Text(_adminBusy ? '...' : 'שמור'),
+                child: Text(_adminBusy ? '...' : tr('save')),
               ),
             ),
             const SizedBox(width: 10),
             TextButton(
               onPressed: () => setState(() => _adminToken = null),
-              child: const Text('נעל'),
+              child: Text(tr('lock')),
             ),
           ],
         ),
