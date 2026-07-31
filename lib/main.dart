@@ -287,7 +287,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
             bottom: 34,
             left: 0,
             right: 0,
-            child: Text('© 2025 Idan Amrani',
+            child: Text('© 2026 Idan Amrani',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.25))),
           ),
@@ -1154,7 +1154,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           Padding(
             padding: const EdgeInsets.only(bottom: 8, top: 4),
             child: Text(
-              '© 2025 Idan Amrani. All rights reserved.',
+              '© 2026 Idan Amrani. All rights reserved.',
               style: TextStyle(color: Theme.of(context).textTheme.bodySmall!.color!.withOpacity(0.5), fontSize: 10),
               textAlign: TextAlign.center,
             ),
@@ -1558,7 +1558,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
           const SizedBox(height: 20),
           Center(
-            child: Text('© 2025 Idan Amrani. All rights reserved.',
+            child: Text('© 2026 Idan Amrani. All rights reserved.',
                 style: TextStyle(color: subTextColor.withOpacity(0.5), fontSize: 10)),
           ),
         ],
@@ -2550,7 +2550,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             ),
             const Spacer(),
             Center(
-              child: Text('© 2025 Idan Amrani. All rights reserved.',
+              child: Text('© 2026 Idan Amrani. All rights reserved.',
                   style: TextStyle(color: subTextColor.withOpacity(0.5), fontSize: 10)),
             ),
             const SizedBox(height: 8),
@@ -2714,7 +2714,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
             const SizedBox(height: 40),
             Center(
-              child: Text('© 2025 Idan Amrani. All rights reserved.',
+              child: Text('© 2026 Idan Amrani. All rights reserved.',
                   style: TextStyle(color: subTextColor.withOpacity(0.5), fontSize: 10)),
             ),
             const SizedBox(height: 8),
