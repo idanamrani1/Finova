@@ -820,9 +820,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       bottomNavigationBar: _buildBottomNav(),
     );
 
-    // במסך רחב (מחשב) - אותו עיצוב בדיוק, ממורכז במסגרת בגודל טלפון קבוע לגמרי.
-    // בכוונה לא מחשבים גודל לפי גובה/רוחב החלון - כל חישוב כזה יצא שונה בכל
-    // מחשב/דפדפן/רזולוציה. הגודל תמיד זהה; אם החלון נמוך מדי, העמוד גולל.
+    // במסך רחב (מחשב): הפריסה תמיד מרונדרת באותן מידות לוגיות (430x860), ואז
+    // מוגדלת/מוקטנת כיחידה אחת (FittedBox) כדי למלא את גובה החלון שיש בפועל.
+    // ככה זה מתאים את עצמו לכל מסך ורזולוציה - גדול במסך גדול, קטן במסך קטן -
+    // אבל הפרופורציות והפריסה הפנימית זהות לחלוטין בכל מחשב.
     return LayoutBuilder(
       builder: (context, constraints) {
         const double breakpoint = 700;
@@ -832,10 +833,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
         return ColoredBox(
           color: widget.isDarkMode ? const Color(0xFF0b0b0f) : const Color(0xFFe4e7ee),
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 32),
-              child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 24),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.contain,
                 child: SizedBox(
                   width: frameWidth,
                   height: frameHeight,
