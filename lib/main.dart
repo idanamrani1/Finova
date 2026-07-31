@@ -537,6 +537,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       if (endpoint != null && endpoint.isNotEmpty) {
         _pushEndpoint = endpoint;
         _pushEnabled = true;
+        // מושכים מהשרת אילו התראות כבר הופעלו בזמן שהאפליקציה הייתה סגורה
+        unawaited(_pullServerAlertState());
         await _registerSubscription(data);
       }
     } catch (_) {}
@@ -615,6 +617,45 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 'lang': widget.lang,
               }))
           .timeout(const Duration(seconds: 15));
+    } catch (_) {}
+  }
+
+  // השרת יודע על הפעלות שקרו כשהאפליקציה הייתה סגורה - מיישרים לפיו,
+  // אחרת המשתמש יראה "פעיל" על התראה שכבר נשלחה
+  Future<void> _pullServerAlertState() async {
+    final endpoint = _pushEndpoint;
+    if (endpoint == null) return;
+    try {
+      final res = await http
+          .post(Uri.parse('$_apiBase/api/push/alerts/list'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'endpoint': endpoint}))
+          .timeout(const Duration(seconds: 15));
+      if (!mounted || res.statusCode != 200) return;
+
+      final serverAlerts = (jsonDecode(res.body) as List)
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      final triggeredIds = {
+        for (final a in serverAlerts)
+          if (a['triggered'] == true) a['id'] as String: a['lastPrice']
+      };
+      if (triggeredIds.isEmpty) return;
+
+      var changed = false;
+      for (final local in _priceAlerts) {
+        final id = local['id'];
+        if (id != null && triggeredIds.containsKey(id) && local['triggered'] != true) {
+          local['triggered'] = true;
+          local['lastPrice'] = triggeredIds[id];
+          changed = true;
+        }
+      }
+      if (changed) {
+        setState(() {});
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('finova_price_alerts', jsonEncode(_priceAlerts));
+      }
     } catch (_) {}
   }
 
@@ -856,8 +897,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       }
     });
 
-    _loadAlerts();
-    _initPush();
+    // ההתראות המקומיות חייבות להיטען לפני שמושכים מהשרת אילו כבר הופעלו
+    _loadAlerts().then((_) => _initPush());
     _alertsCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) => _checkAlerts());
   }
 
