@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'dart:async';
@@ -437,6 +438,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final target = double.tryParse(_alertPriceController.text.trim());
     if (ticker.isEmpty || target == null || target <= 0) return;
 
+    HapticFeedback.lightImpact();
     setState(() {
       _priceAlerts.insert(0, {
         'ticker': ticker,
@@ -452,6 +454,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   void _removeAlert(int index) {
+    HapticFeedback.lightImpact();
     setState(() => _priceAlerts.removeAt(index));
     _saveAlerts();
   }
@@ -499,6 +502,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       await _saveAlerts();
 
       if (firstTriggerMessage != null && mounted) {
+        HapticFeedback.mediumImpact();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(firstTriggerMessage!), duration: const Duration(seconds: 5)),
         );
@@ -756,6 +760,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   void _selectSuggestion(String ticker) {
+    HapticFeedback.selectionClick();
     _searchController.clear();
     setState(() => searchSuggestions = []);
     FocusScope.of(context).unfocus();
@@ -883,7 +888,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Container(
       decoration: BoxDecoration(
         color: cardColor,
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07), width: 0.5)),
+        border: Border(top: BorderSide(color: _overlay(0.10), width: 0.5)),
       ),
       child: SafeArea(
         child: SizedBox(
@@ -906,6 +911,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          HapticFeedback.selectionClick();
           setState(() => _selectedIndex = index);
           if (index == 1) fetchDailyBrief(); // טעינת הסיכום בלחיצה
         },
@@ -1207,6 +1213,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         padding: const EdgeInsets.only(right: 8),
                         child: GestureDetector(
                           onTap: () {
+                            HapticFeedback.selectionClick();
                             _searchController.clear();
                             fetchStockData(ticker);
                           },
@@ -1261,19 +1268,30 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           ),
           const SizedBox(height: 10),
           Expanded(
-            child: isLoading
-                ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
-                : isNotFound
-                ? _buildNotFound()
-                : analysisData == null
-                ? Center(child: Text(tr('searchToStart'), style: TextStyle(color: subTextColor)))
-                : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildSummaryTab(),
-                _buildFundamentalsTab(),
-                _buildCatalystsTab(),
-              ],
+            // מעבר רך בין מצבים (טעינה / שגיאה / תוכן) במקום קפיצה חדה
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 260),
+              switchInCurve: Curves.easeOut,
+              switchOutCurve: Curves.easeIn,
+              child: isLoading
+                  ? Center(
+                      key: const ValueKey('loading'),
+                      child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+                  : isNotFound
+                  ? KeyedSubtree(key: const ValueKey('notfound'), child: _buildNotFound())
+                  : analysisData == null
+                  ? Center(
+                      key: const ValueKey('empty'),
+                      child: Text(tr('searchToStart'), style: TextStyle(color: subTextColor)))
+                  : TabBarView(
+                key: ValueKey('content_$symbol'),
+                controller: _tabController,
+                children: [
+                  _buildSummaryTab(),
+                  _buildFundamentalsTab(),
+                  _buildCatalystsTab(),
+                ],
+              ),
             ),
           ),
           Padding(
@@ -1455,7 +1473,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             margin: const EdgeInsets.only(left: 8),
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.04),
+                              color: _overlay(0.06),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Column(
@@ -1893,6 +1911,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   // ── צבע לפי ציון ──
+  // שכבת-על עדינה (רקעים/מפרידים) שנשארת נראית גם במצב בהיר וגם כהה.
+  // שימוש בלבן קבוע נעלם לגמרי על רקע בהיר.
+  Color _overlay(double opacity) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return (isLight ? Colors.black : Colors.white).withOpacity(opacity);
+  }
+
   Color _scoreColor(int v) {
     if (v >= 68) return const Color(0xFF4ade80);
     if (v >= 50) return const Color(0xFFfbbf24);
@@ -1945,7 +1970,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           width: 78,
                           height: 78,
                           child: CustomPaint(
-                            painter: _ScoreRingPainter(score: total, color: color),
+                            painter: _ScoreRingPainter(
+                                score: total, color: color, trackColor: _overlay(0.12)),
                           ),
                         ),
                         Column(
@@ -2008,7 +2034,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.04),
+                      color: _overlay(0.06),
                       borderRadius: BorderRadius.circular(11),
                     ),
                     child: Column(
@@ -2034,7 +2060,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           child: LinearProgressIndicator(
                             value: v / 100,
                             minHeight: 4,
-                            backgroundColor: Colors.white.withOpacity(0.08),
+                            backgroundColor: _overlay(0.12),
                             valueColor: AlwaysStoppedAnimation(c),
                           ),
                         ),
@@ -3338,14 +3364,15 @@ class _PulsingLiveDotState extends State<_PulsingLiveDot>
 class _ScoreRingPainter extends CustomPainter {
   final int score;
   final Color color;
-  _ScoreRingPainter({required this.score, required this.color});
+  final Color trackColor;
+  _ScoreRingPainter({required this.score, required this.color, required this.trackColor});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
     final radius = (size.width / 2) - 4;
     final bgPaint = Paint()
-      ..color = Colors.white.withOpacity(0.08)
+      ..color = trackColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 7
       ..strokeCap = StrokeCap.round;
@@ -3370,5 +3397,7 @@ class _ScoreRingPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ScoreRingPainter oldDelegate) =>
-      oldDelegate.score != score || oldDelegate.color != color;
+      oldDelegate.score != score ||
+      oldDelegate.color != color ||
+      oldDelegate.trackColor != trackColor;
 }
