@@ -56,6 +56,10 @@ class T {
     'analysisError': {'he': 'לא הצלחנו לטעון את הניתוח כרגע', 'en': "Couldn't load the analysis right now"},
     'analysisErrorHint': {'he': 'זה בדרך כלל זמני - נסה שוב בעוד רגע', 'en': 'This is usually temporary - try again in a moment'},
     'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
+    'stageFetching': {'he': 'מושך נתוני שוק...', 'en': 'Fetching market data...'},
+    'stageAnalyzing': {'he': 'מנתח עם בינה מלאכותית...', 'en': 'Analyzing with AI...'},
+    'stageScoring': {'he': 'מחשב את ציון Finova...', 'en': 'Calculating Finova score...'},
+    'stageAlmost': {'he': 'עוד רגע...', 'en': 'Almost there...'},
     'searchToStart': {'he': 'חפש מניה כדי להתחיל', 'en': 'Search a stock to start'},
     'noAlerts': {'he': 'אין התראות עדיין', 'en': 'No alerts yet'},
     'addAlertHint': {'he': 'הוסף התראה ראשונה למעלה', 'en': 'Add your first alert above'},
@@ -389,6 +393,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   int _selectedIndex = 0;
   String symbol = "NVDA";
   String exchange = "";
+  // האם כבר יש מחיר להצגה (מגיע מהר, לפני שניתוח ה-AI מסתיים)
+  bool hasQuickQuote = false;
+  int _loadingStage = 0;
+  Timer? _loadingStageTimer;
+  int _activeRequestId = 0;
   String currentPrice = "...";
   Timer? _priceTimer;
 
@@ -680,6 +689,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _priceTimer?.cancel();
     _searchDebounce?.cancel();
     _alertsCheckTimer?.cancel();
+    _loadingStageTimer?.cancel();
     _tabController.dispose();
     _searchController.dispose();
     _adminPasswordController.dispose();
@@ -693,20 +703,38 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   Future<void> fetchStockData(String ticker) async {
     if (ticker.isEmpty) return;
+    final upper = ticker.trim().toUpperCase();
     _lastAttemptedTicker = ticker;
+
+    // מזהה ייחודי לבקשה - כדי שתשובה של חיפוש ישן לא תדרוס חיפוש חדש יותר
+    final int requestId = ++_activeRequestId;
+
     setState(() {
       isLoading = true;
       isNotFound = false;
       dailyChange = null;
       chartPrices = null;
+      hasQuickQuote = false;
+      analysisData = null;
+      finovaScore = null;
+      symbol = upper;
+      exchange = '';
+      currentPrice = '...';
+      _loadingStage = 0;
     });
+    _startLoadingStages();
 
-    final url = Uri.parse(
-      'https://finovam.ddns.net/api/analyze/${ticker.trim().toUpperCase()}?lang=${widget.lang}',
-    );
+    // שלב 1 - מחיר מהיר (קריאה קלילה, חוזרת תוך פחות משנייה)
+    // רץ במקביל לניתוח המלא כדי שהמשתמש יראה מחיר מיד
+    unawaited(_fetchQuickQuote(upper, requestId));
+
+    // שלב 2 - הניתוח המלא
+    final url = Uri.parse('$_apiBase/api/analyze/$upper?lang=${widget.lang}');
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 120));
+      if (!mounted || requestId != _activeRequestId) return;
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         setState(() {
@@ -723,6 +751,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           finovaScore = data['finovaScore'] != null
               ? Map<String, dynamic>.from(data['finovaScore'])
               : null;
+          hasQuickQuote = true;
           isLoading = false;
         });
       } else {
@@ -734,11 +763,52 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         });
       }
     } catch (e) {
+      if (!mounted || requestId != _activeRequestId) return;
       setState(() {
         isLoading = false;
         isNotFound = true;
       });
+    } finally {
+      _loadingStageTimer?.cancel();
     }
+  }
+
+  // מחיר בלבד - כדי להציג משהו אמיתי תוך פחות משנייה במקום מסך ריק
+  Future<void> _fetchQuickQuote(String upper, int requestId) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_apiBase/api/quote/$upper'))
+          .timeout(const Duration(seconds: 12));
+      if (!mounted || requestId != _activeRequestId) return;
+      if (res.statusCode != 200) return;
+      final data = jsonDecode(res.body);
+      final price = (data['price'] as num?)?.toDouble() ?? 0;
+      if (price <= 0) return;
+      // אם הניתוח המלא כבר חזר בינתיים - לא דורסים אותו
+      if (analysisData != null) return;
+      setState(() {
+        currentPrice = '\$$price';
+        dailyChange = (data['dailyChange'] as num?)?.toDouble();
+        hasQuickQuote = true;
+      });
+    } catch (_) {}
+  }
+
+  // מקדם את טקסט הסטטוס בזמן ההמתנה, כדי שלא יהיה ספינר אילם
+  void _startLoadingStages() {
+    _loadingStageTimer?.cancel();
+    const steps = [2, 5, 9]; // שניות עד כל שלב
+    var i = 0;
+    _loadingStageTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      i++;
+      if (!mounted) {
+        t.cancel();
+        return;
+      }
+      final stage = steps.where((s) => i >= s).length;
+      if (stage != _loadingStage) setState(() => _loadingStage = stage);
+      if (stage >= steps.length) t.cancel();
+    });
   }
 
   // עדכון מחיר בלבד בזמן אמת - בלי לטעון מחדש את כל הניתוח
@@ -986,7 +1056,8 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (analysisData != null) ...[
+                // מוצג ברגע שיש מחיר (לא ממתין לניתוח ה-AI האיטי)
+                if (analysisData != null || hasQuickQuote) ...[
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
@@ -1299,9 +1370,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               switchInCurve: Curves.easeOut,
               switchOutCurve: Curves.easeIn,
               child: isLoading
-                  ? Center(
-                      key: const ValueKey('loading'),
-                      child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+                  ? _buildLoadingState()
                   : isNotFound
                   ? KeyedSubtree(key: const ValueKey('notfound'), child: _buildNotFound())
                   : analysisData == null
@@ -1364,7 +1433,17 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       child: Directionality(
         textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
         child: isBriefLoading
-            ? Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor))
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const _CandlestickLoader(),
+                    const SizedBox(height: 18),
+                    Text(tr('loadingBrief'),
+                        style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.w500)),
+                  ],
+                ),
+              )
             : briefError
             ? Center(
           child: Column(
@@ -2692,6 +2771,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     );
   }
 
+  // מסך טעינה: נרות יפניים + טקסט סטטוס שמתקדם, במקום ספינר אילם
+  Widget _buildLoadingState() {
+    final subTextColor = Theme.of(context).textTheme.bodySmall!.color!;
+    const stageKeys = ['stageFetching', 'stageAnalyzing', 'stageScoring', 'stageAlmost'];
+    final stageKey = stageKeys[_loadingStage.clamp(0, stageKeys.length - 1)];
+
+    return Center(
+      key: const ValueKey('loading'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _CandlestickLoader(),
+          const SizedBox(height: 18),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            child: Text(
+              tr(stageKey),
+              key: ValueKey(stageKey),
+              style: TextStyle(color: subTextColor, fontSize: 13, fontWeight: FontWeight.w500),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildNotFound() {
     final subTextColor = Theme.of(context).textTheme.bodySmall!.color!;
     final textColor = Theme.of(context).textTheme.bodyMedium!.color!;
@@ -3299,6 +3404,143 @@ class _MiniChartPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
+
+// ───────────────────────────────────────────
+// אנימציית טעינה - נרות יפניים עולים ויורדים
+// ───────────────────────────────────────────
+class _CandlestickLoader extends StatefulWidget {
+  final double width;
+  final double height;
+  const _CandlestickLoader({this.width = 132, this.height = 76});
+
+  @override
+  State<_CandlestickLoader> createState() => _CandlestickLoaderState();
+}
+
+class _CandlestickLoaderState extends State<_CandlestickLoader>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, _) => CustomPaint(
+        size: Size(widget.width, widget.height),
+        painter: _CandlestickPainter(
+          progress: _controller.value,
+          trackColor: (Theme.of(context).brightness == Brightness.light
+                  ? Colors.black
+                  : Colors.white)
+              .withOpacity(0.06),
+        ),
+      ),
+    );
+  }
+}
+
+class _CandlestickPainter extends CustomPainter {
+  final double progress;
+  final Color trackColor;
+  _CandlestickPainter({required this.progress, required this.trackColor});
+
+  // נרות קבועים (open, close, high, low) כשברים מגובה הציור - נראה כמו גרף אמיתי
+  static const List<List<double>> _candles = [
+    [0.34, 0.52, 0.60, 0.28],
+    [0.52, 0.43, 0.57, 0.37],
+    [0.43, 0.66, 0.74, 0.40],
+    [0.66, 0.58, 0.71, 0.52],
+    [0.58, 0.80, 0.88, 0.55],
+  ];
+
+  static const Color _up = Color(0xFF4ade80);
+  static const Color _down = Color(0xFFf87171);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = _candles.length;
+    final slot = size.width / n;
+    final bodyW = slot * 0.52;
+
+    // דהייה עדינה בסוף המחזור לפני שהאנימציה מתחילה מחדש
+    final fade = progress > 0.86 ? 1.0 - ((progress - 0.86) / 0.14) : 1.0;
+
+    double yFor(double frac) => size.height * (1.0 - frac);
+
+    for (int i = 0; i < n; i++) {
+      final c = _candles[i];
+      final open = c[0], close = c[1], high = c[2], low = c[3];
+      final isUp = close >= open;
+      final color = isUp ? _up : _down;
+
+      // כל נר "צומח" בתורו - אפקט מדורג
+      final local = ((progress * (n + 1.2)) - i).clamp(0.0, 1.0);
+      if (local <= 0) continue;
+      final eased = Curves.easeOutCubic.transform(local);
+
+      final cx = slot * i + slot / 2;
+
+      // רקע עמעום של המיקום (כדי שהפריסה לא "תקפוץ")
+      final trackPaint = Paint()
+        ..color = trackColor
+        ..strokeWidth = bodyW
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(
+          Offset(cx, yFor(high)), Offset(cx, yFor(low)), trackPaint);
+
+      final paint = Paint()..color = color.withOpacity(fade);
+
+      // פתיל עליון/תחתון
+      final wickPaint = Paint()
+        ..color = color.withOpacity(0.85 * fade)
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round;
+
+      final bodyTopFrac = isUp ? close : open;
+      final bodyBottomFrac = isUp ? open : close;
+
+      // הנר גדל מהבסיס שלו כלפי מעלה
+      final grownTop = bodyBottomFrac + (bodyTopFrac - bodyBottomFrac) * eased;
+      final grownHigh = bodyTopFrac + (high - bodyTopFrac) * eased;
+      final grownLow = bodyBottomFrac - (bodyBottomFrac - low) * eased;
+
+      canvas.drawLine(
+        Offset(cx, yFor(grownHigh)),
+        Offset(cx, yFor(grownLow)),
+        wickPaint,
+      );
+
+      final top = yFor(grownTop);
+      final bottom = yFor(bodyBottomFrac);
+      final rect = Rect.fromLTRB(cx - bodyW / 2, top, cx + bodyW / 2, bottom);
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+            rect.height < 2 ? Rect.fromLTRB(rect.left, top - 1, rect.right, top + 1) : rect,
+            const Radius.circular(2)),
+        paint,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _CandlestickPainter old) =>
+      old.progress != progress || old.trackColor != trackColor;
 }
 
 // נקודת LIVE פועמת - אנימציה עדינה
