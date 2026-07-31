@@ -136,13 +136,13 @@ class _MyAppState extends State<MyApp> {
       title: 'Finova',
       themeMode: isDarkMode ? ThemeMode.dark : ThemeMode.light,
       theme: ThemeData.light().copyWith(
-        scaffoldBackgroundColor: const Color(0xFFF6F6FB),
+        scaffoldBackgroundColor: const Color(0xFFEBEEF6),
         cardColor: Colors.white,
         primaryColor: const Color(0xFF6366F1),
         iconTheme: const IconThemeData(color: Color(0xFF1A1A2E)),
         textTheme: const TextTheme(
           bodyMedium: TextStyle(color: Color(0xFF1A1A2E)),
-          bodySmall: TextStyle(color: Color(0xFF8E8EA8)),
+          bodySmall: TextStyle(color: Color(0xFF6B6B85)),
         ),
       ),
       darkTheme: ThemeData.dark().copyWith(
@@ -825,20 +825,24 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       bottomNavigationBar: _buildBottomNav(),
     );
 
-    // במסך רחב (מחשב) - אותו עיצוב בדיוק, רק ממורכז ברוחב של טלפון
-    // כדי שלא יימתח מכוער על פני כל המסך
+    // במסך רחב (מחשב) - אותו עיצוב בדיוק, רק ממורכז ברוחב וגובה של טלפון
+    // (גובה קבוע ולא כל גובה החלון, אחרת זה נראה שונה לגמרי בכל רזולוציה)
     return LayoutBuilder(
       builder: (context, constraints) {
         const double breakpoint = 700;
         const double phoneWidth = 430;
+        const double phoneHeight = 860;
         if (constraints.maxWidth <= breakpoint) return scaffold;
+
+        final frameHeight =
+            constraints.maxHeight < phoneHeight + 48 ? constraints.maxHeight - 48 : phoneHeight;
 
         return ColoredBox(
           color: widget.isDarkMode ? const Color(0xFF0b0b0f) : const Color(0xFFe4e7ee),
           child: Center(
             child: SizedBox(
               width: phoneWidth,
-              height: constraints.maxHeight,
+              height: frameHeight,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(28),
