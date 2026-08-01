@@ -48,3 +48,50 @@ jobs:
       # זה בדיוק סדר הבדיקות שגם deploy.sh עושה לפני שהוא נוגע בשרת.
       - name: Build (release, web)
         run: flutter build web --release
+
+      # if: always() קריטי כאן - בלי זה, השלב הזה מדולג לגמרי כשאחד
+      # השלבים הקודמים נכשל, בדיוק ברגע שהכי חשוב לדעת על זה.
+      #
+      # השרשור הזה רץ על runner של GitHub, לא על השרת - אין לו גישה
+      # ל-/etc/finova-backend.env. הכתובת מגיעה מ-GitHub Secret במקום
+      # (Settings → Secrets and variables → Actions בריפו הזה), שאף אחד
+      # לא יכול לקרוא בחזרה אחרי שנשמר.
+      #
+      # בונים את ה-JSON עם jq ולא בהדבקת מחרוזות: הודעת ה-commit מגיעה
+      # ממי שדוחף, והדבקה גולמית שלה לתוך run: היא נקודת הזרקה מוכרת
+      # ב-GitHub Actions. jq דואג ל-escaping נכון.
+      - name: Notify Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          JOB_STATUS: ${{ job.status }}
+          REPO: ${{ github.repository }}
+          SHA_SHORT: ${{ github.event.head_commit.id }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL secret not set - skipping notification"
+            exit 0
+          fi
+
+          if [ "$JOB_STATUS" = "success" ]; then
+            TITLE="✅ CI עבר - $REPO"
+            COLOR=3066993
+          else
+            TITLE="🔴 CI נכשל - $REPO"
+            COLOR=15158332
+          fi
+
+          FIRST_LINE=$(printf '%s' "$COMMIT_MSG" | head -1)
+          SHORT_SHA=$(printf '%s' "$SHA_SHORT" | cut -c1-7)
+
+          PAYLOAD=$(jq -n \
+            --arg title "$TITLE" \
+            --arg desc "**${SHORT_SHA}** מאת ${ACTOR}: ${FIRST_LINE}" \
+            --arg url "$RUN_URL" \
+            --argjson color "$COLOR" \
+            '{embeds: [{title: $title, description: $desc, url: $url, color: $color}]}')
+
+          curl -sf -X POST -H "Content-Type: application/json" -d "$PAYLOAD" "$DISCORD_WEBHOOK_URL"
