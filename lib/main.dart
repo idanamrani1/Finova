@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:async';
 import 'dart:js_interop';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ───────────────────────────────────────────
 // גשר ל-JS של התראות דחיפה (מוגדר ב-index.html)
@@ -65,6 +66,17 @@ class T {
     'confidence': {'he': 'ביטחון', 'en': 'CONFIDENCE'},
     'tapForDetails': {'he': 'הקש לפרטים', 'en': 'Tap for details'},
     'dailyBriefTitle': {'he': 'הסיכום היומי', 'en': 'Daily Brief'},
+    'editionMorning': {'he': 'מהדורת בוקר', 'en': 'Morning edition'},
+    'editionClose': {'he': 'מהדורת נעילה', 'en': 'Closing edition'},
+    'updatedAt': {'he': 'עודכן', 'en': 'Updated'},
+    'myStocks': {'he': 'המניות שלי', 'en': 'My stocks'},
+    'myStocksEmpty': {
+      'he': 'הוסף התראות מחיר ותראה כאן איך המניות שלך זזות',
+      'en': 'Add price alerts and your stocks will show up here'
+    },
+    'sourcesTitle': {'he': 'מקורות', 'en': 'Sources'},
+    'archiveTitle': {'he': 'סיכומים קודמים', 'en': 'Previous briefs'},
+    'archiveEmpty': {'he': 'אין עדיין סיכומים קודמים', 'en': 'No previous briefs yet'},
     'bigHeadline': {'he': 'הכותרת הגדולה היום', 'en': "TODAY'S BIG STORY"},
     'keyMarkets': {'he': 'מדדים מרכזיים', 'en': 'Key Markets'},
     'whatMovesWorld': {'he': 'מה מזיז את העולם', 'en': 'What Moves the World'},
@@ -467,6 +479,59 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Map<String, dynamic>? dailyBriefData;
   bool isBriefLoading = false;
   bool briefError = false;
+
+  // "המניות שלי" בסיכום היומי - נבנה מהטיקרים שיש עליהם התראות
+  List<Map<String, dynamic>> _myMovers = [];
+  List<Map<String, dynamic>> _briefArchive = [];
+
+  Future<void> _fetchMyMovers() async {
+    final tickers = _priceAlerts
+        .map((a) => (a['ticker'] as String?)?.trim().toUpperCase())
+        .whereType<String>()
+        .where((t) => t.isNotEmpty)
+        .toSet()
+        .toList();
+    if (tickers.isEmpty) {
+      if (mounted && _myMovers.isNotEmpty) setState(() => _myMovers = []);
+      return;
+    }
+    try {
+      final res = await http
+          .post(Uri.parse('$_apiBase/api/movers'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'tickers': tickers}))
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || res.statusCode != 200) return;
+      final list = (jsonDecode(res.body) as List)
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() => _myMovers = list);
+    } catch (_) {}
+  }
+
+  Future<void> _fetchBriefArchive() async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_apiBase/api/daily-brief/archive?lang=${widget.lang}'))
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || res.statusCode != 200) return;
+      final list = (jsonDecode(res.body) as List)
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() => _briefArchive = list);
+    } catch (_) {}
+  }
+
+  Future<void> _openUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        if (mounted) _showSnack(tr('connectionError'));
+      }
+    } catch (_) {
+      if (mounted) _showSnack(tr('connectionError'));
+    }
+  }
 
   final List<String> popularTickers = ['NVDA', 'AAPL', 'MSFT', 'PLTR', 'UBER', 'TSLA'];
 
@@ -1125,11 +1190,15 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
     try {
       final response = await http.get(url).timeout(const Duration(seconds: 120));
+      if (!mounted) return;
       if (response.statusCode == 200) {
         setState(() {
           dailyBriefData = json.decode(response.body);
           isBriefLoading = false;
         });
+        // המניות של המשתמש והארכיון נטענים אחרי הסיכום, בלי לעכב אותו
+        unawaited(_fetchMyMovers());
+        unawaited(_fetchBriefArchive());
       } else {
         setState(() {
           isBriefLoading = false;
@@ -1747,6 +1816,32 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                           fontWeight: FontWeight.w800,
                           color: textColor,
                           letterSpacing: -0.3)),
+                  // איזו מהדורה ומתי נכתבה - חשוב כדי שלא יתבלבלו בין
+                  // תחזית בוקר לסיכום אחרי נעילה
+                  Builder(builder: (_) {
+                    final ed = dailyBriefData?['edition']?.toString() ?? '';
+                    final at = dailyBriefData?['generatedAt']?.toString() ?? '';
+                    if (ed.isEmpty) return const SizedBox.shrink();
+                    final label = ed == 'close' ? tr('editionClose') : tr('editionMorning');
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 3),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(ed == 'close' ? Icons.nightlight_round : Icons.wb_twilight,
+                              size: 12, color: Theme.of(context).primaryColor),
+                          const SizedBox(width: 5),
+                          Text(
+                            at.isEmpty ? label : '$label · ${tr('updatedAt')} $at',
+                            style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Theme.of(context).primaryColor),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
                 ],
               ),
               const Spacer(),
@@ -2049,6 +2144,11 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
             }),
           ],
 
+          const SizedBox(height: 22),
+          _buildMyStocksSection(textColor, subTextColor),
+          _buildSourcesSection(textColor, subTextColor),
+          _buildArchiveSection(textColor, subTextColor),
+
           const SizedBox(height: 20),
           Center(
             child: Text('© 2026 Idan Amrani. All rights reserved.',
@@ -2057,6 +2157,188 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         ],
       ),
       ),
+    );
+  }
+
+  // ── "המניות שלי": מחבר את הסיכום הכללי למה שהמשתמש באמת עוקב אחריו ──
+  Widget _buildMyStocksSection(Color textColor, Color subTextColor) {
+    final cardColor = Theme.of(context).cardColor;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.star_rounded, size: 18, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 7),
+            Text(tr('myStocks'),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_myMovers.isEmpty)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+            child: Text(tr('myStocksEmpty'),
+                style: TextStyle(color: subTextColor, fontSize: 12.5, height: 1.4)),
+          )
+        else
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _myMovers.map((m) {
+              final change = (m['change'] as num?)?.toDouble() ?? 0;
+              final up = change >= 0;
+              final c = up ? const Color(0xFF4ade80) : const Color(0xFFf87171);
+              return GestureDetector(
+                onTap: () {
+                  HapticFeedback.selectionClick();
+                  setState(() => _selectedIndex = 0);
+                  fetchStockData(m['ticker']?.toString() ?? '');
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: c.withOpacity(0.3), width: 1),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(m['ticker']?.toString() ?? '',
+                          style: TextStyle(
+                              color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                      const SizedBox(height: 3),
+                      Text('\$${m['price']}',
+                          style: TextStyle(color: subTextColor, fontSize: 12)),
+                      const SizedBox(height: 2),
+                      Text('${up ? '+' : ''}${change.toStringAsFixed(2)}%',
+                          style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12)),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        const SizedBox(height: 22),
+      ],
+    );
+  }
+
+  // ── מקורות: הכותרות המקוריות, ניתנות ללחיצה ──
+  Widget _buildSourcesSection(Color textColor, Color subTextColor) {
+    final sources = (dailyBriefData?['sources'] as List?) ?? [];
+    if (sources.isEmpty) return const SizedBox.shrink();
+    final cardColor = Theme.of(context).cardColor;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.link_rounded, size: 18, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 7),
+            Text(tr('sourcesTitle'),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...sources.take(6).map((raw) {
+          final item = Map<String, dynamic>.from(raw as Map);
+          final url = item['url']?.toString() ?? '';
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(12),
+              onTap: url.isEmpty ? null : () => _openUrl(url),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(item['headline']?.toString() ?? '',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: textColor, fontSize: 13, height: 1.35)),
+                          if ((item['source']?.toString() ?? '').isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(item['source'].toString(),
+                                style: TextStyle(color: subTextColor, fontSize: 11)),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Icon(Icons.open_in_new_rounded, size: 15, color: subTextColor),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 22),
+      ],
+    );
+  }
+
+  // ── ארכיון: מה נכתב בימים קודמים ──
+  Widget _buildArchiveSection(Color textColor, Color subTextColor) {
+    // הסיכום של היום כבר מוצג למעלה, אין טעם לחזור עליו ברשימה
+    final past = _briefArchive
+        .where((b) => b['date']?.toString() != (dailyBriefData?['date']?.toString() ?? ''))
+        .toList();
+    if (past.isEmpty) return const SizedBox.shrink();
+    final cardColor = Theme.of(context).cardColor;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.history_rounded, size: 18, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 7),
+            Text(tr('archiveTitle'),
+                style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textColor)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        ...past.take(7).map((b) {
+          final ed = b['edition']?.toString() ?? '';
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(b['date']?.toString() ?? '',
+                          style: TextStyle(
+                              color: subTextColor, fontSize: 11, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 6),
+                      Text(ed == 'close' ? tr('editionClose') : tr('editionMorning'),
+                          style: TextStyle(color: subTextColor.withOpacity(0.8), fontSize: 10.5)),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(b['headline']?.toString() ?? '',
+                      style: TextStyle(color: textColor, fontSize: 13, height: 1.35)),
+                ],
+              ),
+            ),
+          );
+        }),
+        const SizedBox(height: 10),
+      ],
     );
   }
 
