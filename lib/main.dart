@@ -38,6 +38,7 @@ class T {
     'catalysts': {'he': 'קטליזטורים', 'en': 'Catalysts'},
     'finovaScore': {'he': 'ציון FINOVA', 'en': 'FINOVA SCORE'},
     'quality': {'he': 'איכות', 'en': 'Quality'},
+    'weakest': {'he': 'הנקודה החלשה', 'en': 'Weakest'},
     'value': {'he': 'מחיר', 'en': 'Value'},
     'growth': {'he': 'צמיחה', 'en': 'Growth'},
     'risk': {'he': 'סיכון', 'en': 'Risk'},
@@ -457,6 +458,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   int _selectedIndex = 0;
   String symbol = "NVDA";
   String exchange = "";
+  int? _chartTouchIndex;
   // האם כבר יש מחיר להצגה (מגיע מהר, לפני שניתוח ה-AI מסתיים)
   bool hasQuickQuote = false;
   int _loadingStage = 0;
@@ -1720,20 +1722,79 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   }
 
   Widget _buildMiniChart() {
-    return Container(
-      height: 64,
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.04),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(14),
-        child: CustomPaint(
-          painter: _MiniChartPainter(data: chartPrices, isPositive: (dailyChange ?? 0) >= 0),
-          child: const SizedBox.expand(),
-        ),
-      ),
-    );
+    final hasData = chartPrices != null && chartPrices!.isNotEmpty;
+    final up = (dailyChange ?? 0) >= 0;
+    final lineColor = up ? const Color(0xFF4ade80) : const Color(0xFFf87171);
+
+    return LayoutBuilder(builder: (context, constraints) {
+      // גרר/הקש כדי לקרוא את המחיר בנקודה מסוימת - הגרף היה תצוגה בלבד
+      void updateFromPosition(double dx) {
+        if (!hasData) return;
+        final n = chartPrices!.length;
+        if (n < 2) return;
+        final ratio = (dx / constraints.maxWidth).clamp(0.0, 1.0);
+        final idx = (ratio * (n - 1)).round().clamp(0, n - 1);
+        if (idx != _chartTouchIndex) {
+          HapticFeedback.selectionClick();
+          setState(() => _chartTouchIndex = idx);
+        }
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // המחיר בנקודה שנוגעים בה, מעל הגרף כדי שהאצבע לא תסתיר אותו
+          SizedBox(
+            height: 16,
+            child: (_chartTouchIndex != null && hasData)
+                ? Row(
+                    children: [
+                      Text('\$${chartPrices![_chartTouchIndex!].toStringAsFixed(2)}',
+                          style: TextStyle(
+                              color: lineColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${chartPrices!.length - 1 - _chartTouchIndex!}${widget.lang == 'he' ? ' ימים אחורה' : 'd ago'}',
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.45), fontSize: 10.5),
+                      ),
+                    ],
+                  )
+                : const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: (d) => updateFromPosition(d.localPosition.dx),
+            onHorizontalDragStart: (d) => updateFromPosition(d.localPosition.dx),
+            onHorizontalDragUpdate: (d) => updateFromPosition(d.localPosition.dx),
+            onHorizontalDragEnd: (_) => setState(() => _chartTouchIndex = null),
+            onTapUp: (_) => setState(() => _chartTouchIndex = null),
+            onTapCancel: () => setState(() => _chartTouchIndex = null),
+            child: Container(
+              height: 104,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.04),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: CustomPaint(
+                  painter: _MiniChartPainter(
+                    data: chartPrices,
+                    isPositive: up,
+                    touchIndex: _chartTouchIndex,
+                  ),
+                  child: const SizedBox.expand(),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    });
   }
 
   // ─────────────────────────────────────────────
@@ -2578,25 +2639,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     final String quickTake = s['quickTake'] ?? '';
     final Color color = _scoreColor(total);
 
+    // מסודר מהחלש לחזק: הדבר שמושך את הציון למטה הוא מה שמעניין,
+    // ובסדר קבוע היה צריך לקרוא את כל הארבעה כדי למצוא אותו
     final subs = [
       {'name': tr('quality'), 'val': (s['quality'] ?? 0) as int},
       {'name': tr('value'), 'val': (s['value'] ?? 0) as int},
       {'name': tr('growth'), 'val': (s['growth'] ?? 0) as int},
       {'name': tr('risk'), 'val': (s['risk'] ?? 0) as int},
-    ];
+    ]..sort((a, b) => (a['val'] as int).compareTo(b['val'] as int));
+
+    // מסמנים את החלש ביותר רק אם יש באמת פער - אם כולם שווים אין "נקודה חלשה"
+    final int lowestVal = subs.first['val'] as int;
+    final bool hasClearWeakest =
+        subs.length > 1 && lowestVal < (subs[1]['val'] as int);
 
     return GestureDetector(
       onTap: _showScoreBreakdown,
       child: Container(
         padding: const EdgeInsets.all(18),
+        // כרטיס שטוח בכוונה: המחיר למעלה וההמלצה למטה נושאים גרדיאנט,
+        // וכששלושתם צועקים אין לעין לאן ללכת. הטבעת הצבעונית מספיקה כדי
+        // לתת לציון נוכחות בלי להתחרות עליהם.
         decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topRight,
-            end: Alignment.bottomLeft,
-            colors: [color.withOpacity(0.16), const Color(0xFF14241A).withOpacity(0.0)],
-          ),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: color.withOpacity(0.28), width: 1),
+          border: Border.all(color: color.withOpacity(0.22), width: 1),
         ),
         child: Directionality(
           textDirection: widget.lang == 'he' ? TextDirection.rtl : TextDirection.ltr,
@@ -2674,24 +2741,46 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                 crossAxisSpacing: 8,
                 mainAxisSpacing: 8,
                 childAspectRatio: 3.4,
-                children: subs.map((sub) {
+                children: subs.asMap().entries.map((entry) {
+                  final sub = entry.value;
                   final v = sub['val'] as int;
                   final c = _scoreColor(v);
+                  // הכרטיסייה הראשונה היא הנמוכה ביותר אחרי המיון
+                  final isWeakest = entry.key == 0 && hasClearWeakest;
                   return Container(
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
                     decoration: BoxDecoration(
                       color: _overlay(0.06),
                       borderRadius: BorderRadius.circular(11),
+                      border: isWeakest
+                          ? Border.all(color: c.withOpacity(0.55), width: 1)
+                          : null,
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Row(
                           children: [
-                            Text(sub['name'] as String,
-                                style: TextStyle(
-                                    fontSize: 11,
-                                    color: Theme.of(context).textTheme.bodySmall!.color)),
+                            Flexible(
+                              child: Text(sub['name'] as String,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      color: Theme.of(context).textTheme.bodySmall!.color)),
+                            ),
+                            if (isWeakest) ...[
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text('· ${tr('weakest')}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: c)),
+                              ),
+                            ],
                             const Spacer(),
                             Text('$v',
                                 style: TextStyle(
@@ -3996,8 +4085,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 class _MiniChartPainter extends CustomPainter {
   final List<double>? data;
   final bool isPositive;
+  final int? touchIndex;
 
-  _MiniChartPainter({this.data, this.isPositive = true});
+  _MiniChartPainter({this.data, this.isPositive = true, this.touchIndex});
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -4052,6 +4142,26 @@ class _MiniChartPainter extends CustomPainter {
 
     canvas.drawPath(fillPath, fillPaint);
     canvas.drawPath(path, paint);
+
+    // סמן הנקודה שנוגעים בה: קו אנכי + עיגול על הערך
+    if (touchIndex != null &&
+        data != null &&
+        touchIndex! >= 0 &&
+        touchIndex! < normalizedPoints.length &&
+        normalizedPoints.length > 1) {
+      final x = (touchIndex! / (normalizedPoints.length - 1)) * size.width;
+      final y = normalizedPoints[touchIndex!] * size.height;
+
+      canvas.drawLine(
+        Offset(x, 0),
+        Offset(x, size.height),
+        Paint()
+          ..color = color.withOpacity(0.35)
+          ..strokeWidth = 1,
+      );
+      canvas.drawCircle(Offset(x, y), 6, Paint()..color = color.withOpacity(0.25));
+      canvas.drawCircle(Offset(x, y), 3.5, Paint()..color = color);
+    }
   }
 
   @override
