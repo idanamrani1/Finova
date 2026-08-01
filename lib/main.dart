@@ -1620,7 +1620,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     children: popularTickers.map((ticker) {
                       final isActive = ticker == symbol;
                       return Padding(
-                        padding: const EdgeInsets.only(right: 8),
+                        padding: const EdgeInsetsDirectional.only(end: 8),
                         child: GestureDetector(
                           onTap: () {
                             HapticFeedback.selectionClick();
@@ -1925,7 +1925,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             : price.toStringAsFixed(2);
                         return Expanded(
                           child: Container(
-                            margin: const EdgeInsets.only(left: 8),
+                            margin: const EdgeInsetsDirectional.only(start: 8),
                             padding: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               color: _overlay(0.06),
@@ -3187,14 +3187,19 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     fontWeight: FontWeight.w500,
                     letterSpacing: 0.3)),
             const SizedBox(height: 3),
-            Text(value,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                    color: valueColor,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.3)),
+            // ערכים כמו "$164.07 - $236.54" ארוכים, ובהגדלת טקסט הם נחתכו.
+            // מכווצים לרוחב הכרטיס במקום לאבד את סוף המספר.
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: AlignmentDirectional.centerStart,
+              child: Text(value,
+                  maxLines: 1,
+                  style: TextStyle(
+                      color: valueColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: -0.3)),
+            ),
           ],
         ),
       ),
