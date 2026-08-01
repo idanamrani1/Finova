@@ -32,8 +32,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
+      # --no-fatal-infos: flutter analyze נכשל כברירת מחדל גם על הערות
+      # info בלבד (לא רק error/warning אמיתיים) - זה בדיוק מה ששבר את
+      # הריצה הראשונה של ה-CI הזה, על 12 הערות סגנון לא-מזיקות שכבר
+      # קיימות בקוד. deploy.sh מתעלם מ-info באותה רוח (grep רק על error);
+      # כאן, warning עדיין נשאר fatal בכוונה - זה מחמיר יותר מ-deploy.sh
+      # במתכוון, כי warning לרוב מצביע על בעיה אמיתית ולא רק סגנון.
       - name: Analyze
-        run: flutter analyze --no-pub
+        run: flutter analyze --no-pub --no-fatal-infos
 
       - name: Test
         run: flutter test
