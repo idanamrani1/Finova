@@ -195,8 +195,10 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    // מסך הפתיחה מוצג 2.5 שניות ואז עובר לאפליקציה
-    Timer(const Duration(milliseconds: 2500), () {
+    // מסך הפתיחה מוצג *מעל* האפליקציה ולא במקומה, כך שהדשבורד נבנה
+    // מיד ומתחיל למשוך נתונים במקביל. קודם הוא הוחלף בו, ולכן הבקשה
+    // הראשונה לשרת יצאה רק אחרי שהספלאש נגמר.
+    Timer(const Duration(milliseconds: 1400), () {
       if (mounted) setState(() => _showSplash = false);
     });
   }
@@ -251,15 +253,26 @@ class _MyAppState extends State<MyApp> {
           child: child!,
         );
       },
-      home: _showSplash
-          ? const SplashScreen()
-          : DashboardScreen(
-        onThemeChanged: toggleTheme,
-        isDarkMode: isDarkMode,
-        onTextScaleChanged: setTextScale,
-        textScale: textScale,
-        lang: lang,
-        onLangChanged: setLang,
+      home: Stack(
+        children: [
+          DashboardScreen(
+            onThemeChanged: toggleTheme,
+            isDarkMode: isDarkMode,
+            onTextScaleChanged: setTextScale,
+            textScale: textScale,
+            lang: lang,
+            onLangChanged: setLang,
+          ),
+          // דהייה החוצה במקום היעלמות פתאומית
+          IgnorePointer(
+            ignoring: !_showSplash,
+            child: AnimatedOpacity(
+              opacity: _showSplash ? 1 : 0,
+              duration: const Duration(milliseconds: 450),
+              child: const SplashScreen(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -459,6 +472,29 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   String symbol = "NVDA";
   String exchange = "";
   int? _chartTouchIndex;
+
+  // שינוי יומי לצ'יפים של המניות הפופולריות, כדי שהשורה תהיה מידע
+  // ולא רק קיצורי דרך. משתמש באותו endpoint של "המניות שלי".
+  Map<String, double> _popularChanges = {};
+
+  Future<void> _fetchPopularChanges() async {
+    try {
+      final res = await http
+          .post(Uri.parse('$_apiBase/api/movers'),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'tickers': popularTickers}))
+          .timeout(const Duration(seconds: 20));
+      if (!mounted || res.statusCode != 200) return;
+      final map = <String, double>{};
+      for (final raw in (jsonDecode(res.body) as List)) {
+        final m = Map<String, dynamic>.from(raw);
+        final t = m['ticker']?.toString();
+        final c = (m['change'] as num?)?.toDouble();
+        if (t != null && c != null) map[t] = c;
+      }
+      setState(() => _popularChanges = map);
+    } catch (_) {}
+  }
   // האם כבר יש מחיר להצגה (מגיע מהר, לפני שניתוח ה-AI מסתיים)
   bool hasQuickQuote = false;
   int _loadingStage = 0;
@@ -966,11 +1002,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     _priceTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
       if (analysisData != null && !isLoading && _selectedIndex == 0) {
         _refreshPrice(symbol);
+        _fetchPopularChanges();
       }
     });
 
     // ההתראות המקומיות חייבות להיטען לפני שמושכים מהשרת אילו כבר הופעלו
     _loadAlerts().then((_) => _initPush());
+    _fetchPopularChanges();
     _alertsCheckTimer = Timer.periodic(const Duration(seconds: 30), (timer) => _checkAlerts());
   }
 
@@ -1639,14 +1677,31 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 width: 1,
                               ),
                             ),
-                            child: Text(
-                              ticker,
-                              style: TextStyle(
+                            child: Builder(builder: (_) {
+                              final chg = _popularChanges[ticker];
+                              final symbolStyle = TextStyle(
                                 color: isActive ? Theme.of(context).primaryColor : subTextColor,
                                 fontSize: 12,
                                 fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                              ),
-                            ),
+                              );
+                              if (chg == null) return Text(ticker, style: symbolStyle);
+                              final up = chg >= 0;
+                              return Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(ticker, style: symbolStyle),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    '${up ? '+' : ''}${chg.toStringAsFixed(1)}%',
+                                    style: TextStyle(
+                                      color: up ? const Color(0xFF4ade80) : const Color(0xFFf87171),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }),
                           ),
                         ),
                       );
@@ -2625,10 +2680,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return (isLight ? Colors.black : Colors.white).withOpacity(opacity);
   }
 
+  // סקאלה נפרדת לאיכות. בכוונה לא ירוק/אדום של השוק: אלה שמורים לכיוון
+  // המחיר, ושימוש באותו ירוק גם ל"ציון טוב" הפך צבע אחד לשתי משמעויות
+  // באותו כרטיס. כאן: טורקיז=חזק, אינדיגו=בינוני, סגול-ורוד=חלש.
   Color _scoreColor(int v) {
-    if (v >= 68) return const Color(0xFF4ade80);
-    if (v >= 50) return const Color(0xFFfbbf24);
-    return const Color(0xFFf87171);
+    if (v >= 68) return const Color(0xFF2DD4BF);
+    if (v >= 50) return const Color(0xFF818CF8);
+    return const Color(0xFFC084FC);
   }
 
   // ── כרטיס ציון Finova ──
@@ -2898,11 +2956,12 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                         ),
                         ...entry.value.map((f) {
                           final tone = f['tone'] as String? ?? 'neutral';
+                          // אותה סקאלת איכות כמו הציון עצמו, לא ירוק/אדום של השוק
                           final Color tc = tone == 'good'
-                              ? const Color(0xFF4ade80)
+                              ? const Color(0xFF2DD4BF)
                               : tone == 'bad'
-                              ? const Color(0xFFf87171)
-                              : const Color(0xFFfbbf24);
+                              ? const Color(0xFFC084FC)
+                              : const Color(0xFF818CF8);
                           final IconData ic = tone == 'good'
                               ? Icons.check_circle_outline
                               : tone == 'bad'
