@@ -232,9 +232,15 @@ class _MyAppState extends State<MyApp> {
         cardColor: Colors.white,
         primaryColor: const Color(0xFF6366F1),
         iconTheme: const IconThemeData(color: Color(0xFF1A1A2E)),
+        // ספרות ברוחב אחיד: המחיר מתעדכן כל 15 שניות, ובגופן רגיל
+        // הרוחב משתנה עם הספרות והמספר "קופץ" בכל רענון
         textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Color(0xFF1A1A2E)),
-          bodySmall: TextStyle(color: Color(0xFF6B6B85)),
+          bodyMedium: TextStyle(
+              color: Color(0xFF1A1A2E),
+              fontFeatures: [FontFeature.tabularFigures()]),
+          bodySmall: TextStyle(
+              color: Color(0xFF6B6B85),
+              fontFeatures: [FontFeature.tabularFigures()]),
         ),
       ),
       darkTheme: ThemeData.dark().copyWith(
@@ -243,8 +249,12 @@ class _MyAppState extends State<MyApp> {
         primaryColor: const Color(0xFF7C7FF2),
         iconTheme: const IconThemeData(color: Colors.white),
         textTheme: const TextTheme(
-          bodyMedium: TextStyle(color: Color(0xFFF5F5FA)),
-          bodySmall: TextStyle(color: Color(0xFF7A7A92)),
+          bodyMedium: TextStyle(
+              color: Color(0xFFF5F5FA),
+              fontFeatures: [FontFeature.tabularFigures()]),
+          bodySmall: TextStyle(
+              color: Color(0xFF7A7A92),
+              fontFeatures: [FontFeature.tabularFigures()]),
         ),
       ),
       builder: (context, child) {
@@ -357,7 +367,7 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                       width: 96,
                       height: 96,
                       decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(26),
+                        borderRadius: BorderRadius.circular(28),
                         gradient: const LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
@@ -1416,7 +1426,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     width: double.infinity,
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24),
+                      borderRadius: BorderRadius.circular(20),
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -1455,7 +1465,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                                 decoration: BoxDecoration(
                                   color: Colors.white.withOpacity(0.08),
-                                  borderRadius: BorderRadius.circular(7),
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                                 child: Text(exchange,
                                     style: const TextStyle(
@@ -1487,7 +1497,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                                 decoration: BoxDecoration(
                                     color: changeBgColor,
-                                    borderRadius: BorderRadius.circular(9)),
+                                    borderRadius: BorderRadius.circular(8)),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
@@ -1629,7 +1639,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: Theme.of(context).primaryColor.withOpacity(0.15),
-                                    borderRadius: BorderRadius.circular(7),
+                                    borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(ticker,
                                       style: TextStyle(
@@ -1988,7 +1998,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
           if (headline.toString().isNotEmpty)
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topRight,
@@ -2104,10 +2114,10 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},')
                     : price.toStringAsFixed(2);
                 return Container(
-                  padding: const EdgeInsets.all(13),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(15),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(color: c.withOpacity(0.18), width: 1),
                   ),
                   child: Column(
@@ -2247,7 +2257,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                             padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                             decoration: BoxDecoration(
                               color: Theme.of(context).primaryColor.withOpacity(0.18),
-                              borderRadius: BorderRadius.circular(7),
+                              borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(company['ticker']?.toString() ?? '',
                                 style: TextStyle(
@@ -2490,7 +2500,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(15),
+          borderRadius: BorderRadius.circular(16),
           border: Border(right: BorderSide(color: c, width: 3)),
         ),
         child: Column(
@@ -2500,7 +2510,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
                 color: c.withOpacity(0.15),
-                borderRadius: BorderRadius.circular(5),
+                borderRadius: BorderRadius.circular(6),
               ),
               child: Text(category,
                   style: TextStyle(color: c, fontSize: 9, fontWeight: FontWeight.w700)),
@@ -2714,13 +2724,13 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     return GestureDetector(
       onTap: _showScoreBreakdown,
       child: Container(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(16),
         // כרטיס שטוח בכוונה: המחיר למעלה וההמלצה למטה נושאים גרדיאנט,
         // וכששלושתם צועקים אין לעין לאן ללכת. הטבעת הצבעונית מספיקה כדי
         // לתת לציון נוכחות בלי להתחרות עליהם.
         decoration: BoxDecoration(
           color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: color.withOpacity(0.22), width: 1),
         ),
         child: Directionality(
@@ -2809,7 +2819,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                     padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
                     decoration: BoxDecoration(
                       color: _overlay(0.06),
-                      borderRadius: BorderRadius.circular(11),
+                      borderRadius: BorderRadius.circular(12),
                       border: isWeakest
                           ? Border.all(color: c.withOpacity(0.55), width: 1)
                           : null,
@@ -3015,7 +3025,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
                   }).toList(),
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.all(13),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Theme.of(context).primaryColor.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
