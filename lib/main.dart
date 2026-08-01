@@ -92,6 +92,10 @@ class T {
     'normal': {'he': 'רגיל', 'en': 'Normal'},
     'large': {'he': 'גדול', 'en': 'Large'},
     'notFound': {'he': 'לא נמצאה מניה כזו', 'en': 'No such stock found'},
+    'notFoundHint': {
+      'he': 'בדוק את הסימבול ונסה שוב, או חפש לפי שם החברה',
+      'en': 'Check the symbol, or search by company name instead'
+    },
     'analysisError': {'he': 'לא הצלחנו לטעון את הניתוח כרגע', 'en': "Couldn't load the analysis right now"},
     'analysisErrorHint': {'he': 'זה בדרך כלל זמני - נסה שוב בעוד רגע', 'en': 'This is usually temporary - try again in a moment'},
     'analyzing': {'he': 'מנתח...', 'en': 'Analyzing...'},
@@ -466,6 +470,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
 
   bool isLoading = false;
   bool isNotFound = false;
+  bool isUnknownSymbol = false;
   String _lastAttemptedTicker = "NVDA";
   Map<String, dynamic>? analysisData;
   Map<String, dynamic>? finovaScore;
@@ -1010,6 +1015,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
     setState(() {
       isLoading = true;
       isNotFound = false;
+      isUnknownSymbol = false;
       dailyChange = null;
       chartPrices = null;
       hasQuickQuote = false;
@@ -1056,6 +1062,9 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
         setState(() {
           isLoading = false;
           isNotFound = true;
+          // 404 = הסימבול באמת לא קיים. כל שאר הכשלים חולפים, ולהם
+          // מתאים "נסה שוב" ולא "המנייה לא קיימת".
+          isUnknownSymbol = response.statusCode == 404;
           analysisData = null;
           finovaScore = null;
         });
@@ -1065,6 +1074,7 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
       setState(() {
         isLoading = false;
         isNotFound = true;
+        isUnknownSymbol = false;
       });
     } finally {
       _loadingStageTimer?.cancel();
@@ -3332,21 +3342,39 @@ class _DashboardScreenState extends State<DashboardScreen> with SingleTickerProv
   Widget _buildNotFound() {
     final subTextColor = Theme.of(context).textTheme.bodySmall!.color!;
     final textColor = Theme.of(context).textTheme.bodyMedium!.color!;
+    // סימבול שלא קיים זו לא תקלה חולפת - "נסה שוב" רק יחזור על אותה תוצאה,
+    // אז מציגים הודעה אחרת בלי כפתור ניסיון חוזר
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.error_outline_rounded, size: 64, color: subTextColor),
-          const SizedBox(height: 16),
-          Text(tr('analysisError'), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor)),
-          const SizedBox(height: 4),
-          Text(tr('analysisErrorHint'), style: TextStyle(color: subTextColor, fontSize: 13)),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: isLoading ? null : () => fetchStockData(_lastAttemptedTicker),
-            child: Text(tr('retry')),
-          ),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(isUnknownSymbol ? Icons.search_off_rounded : Icons.error_outline_rounded,
+                size: 64, color: subTextColor),
+            const SizedBox(height: 16),
+            Text(
+              isUnknownSymbol
+                  ? '${tr('notFound')}${_lastAttemptedTicker.isEmpty ? '' : ' · ${_lastAttemptedTicker.toUpperCase()}'}'
+                  : tr('analysisError'),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isUnknownSymbol ? tr('notFoundHint') : tr('analysisErrorHint'),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: subTextColor, fontSize: 13, height: 1.4),
+            ),
+            if (!isUnknownSymbol) ...[
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: isLoading ? null : () => fetchStockData(_lastAttemptedTicker),
+                child: Text(tr('retry')),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
