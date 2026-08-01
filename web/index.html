@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="he" dir="rtl">
 <head>
   <!--
     If you are serving your web app in a path other than the root, change the
@@ -18,18 +18,19 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Finova equity research app.">
+  <meta name="description" content="Finova - ניתוח מניות מבוסס בינה מלאכותית: ציון Finova, נתונים פונדמנטליים, סיכום שוק יומי והתראות מחיר.">
+  <meta name="theme-color" content="#050508">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Finova">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
 
-  <title>Finova</title>
+  <title>Finova - ניתוח מניות חכם</title>
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -63,6 +64,23 @@
         for (let i = 0; i < bytes.length; i++) str += String.fromCharCode(bytes[i]);
         return window.btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       }
+
+      // Flutter מאתחל את <html lang> לפי הלוקאל שלו ודורס את מה שכתוב
+      // ב-HTML הסטטי, וכך העמוד הוכרז כאנגלית למרות שכולו עברית - כשל
+      // בקריטריון 3.1.1 של WCAG. הדארט קורא לזה אחרי העלייה ובכל החלפת שפה.
+      window.finovaDoc = {
+        applyLang: function (lang) {
+          try {
+            var he = lang === 'he';
+            document.documentElement.lang = he ? 'he' : 'en';
+            document.documentElement.dir = he ? 'rtl' : 'ltr';
+            document.title = he
+              ? 'Finova - ניתוח מניות חכם'
+              : 'Finova - smart stock research';
+          } catch (e) {}
+          return '';
+        },
+      };
 
       window.finovaPush = {
         supported: function () {

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 148 24" width="148" height="24" role="img" aria-label="FINOVA">
+  <g fill="#000000">
+    <rect x="1" y="3.75" width="22" height="4.5" rx="2.25"/>
+    <rect x="1" y="9.75" width="15" height="4.5" rx="2.25"/>
+    <rect x="1" y="15.75" width="8.5" height="4.5" rx="2.25"/>
+  </g>
+  <text x="34" y="18" font-family="Heebo, 'Segoe UI', Helvetica, Arial, sans-serif"
+        font-size="20" font-weight="600" letter-spacing="1.6" fill="#000000">FINOVA</text>
+</svg>

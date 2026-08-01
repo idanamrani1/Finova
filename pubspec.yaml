@@ -59,6 +59,23 @@ flutter:
   assets:
     - assets/icon.png
 
+  # One family covering Hebrew and Latin. Without it the app falls back to
+  # Roboto, whose Hebrew is resolved by the host OS - which is why the same
+  # screen looked different on iPhone and on Android.
+  # assets/brand/*.svg are brand source files (favicon / app icon / press) and
+  # are deliberately NOT bundled: the in-app logo is drawn natively.
+  fonts:
+    - family: Heebo
+      fonts:
+        - asset: assets/fonts/Heebo-400.ttf
+          weight: 400
+        - asset: assets/fonts/Heebo-500.ttf
+          weight: 500
+        - asset: assets/fonts/Heebo-600.ttf
+          weight: 600
+        - asset: assets/fonts/Heebo-700.ttf
+          weight: 700
+
 flutter_launcher_icons:
   android: true
   ios: true
